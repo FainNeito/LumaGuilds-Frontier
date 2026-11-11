@@ -56,6 +56,7 @@ class LumaGuilds : JavaPlugin() {
     private var liteBansStrikeHookRegistered = false
     private var enthusiaStaffStrikeFeed: AutoCloseable? = null
     private var inviteBlockLifecycle: net.lumalyte.lg.application.services.DurableInviteBlockService? = null
+    private var frontierTerritoryScoreboard: FrontierTerritoryScoreboard? = null
     internal lateinit var vaultProtectionListener: net.lumalyte.lg.infrastructure.listeners.VaultProtectionListener
     internal var enabledAtMillis: Long = 0L
         private set
@@ -986,7 +987,24 @@ class LumaGuilds : JavaPlugin() {
             }
             server.worlds.forEach(rules::configure)
             rules.start(this)
+            val raidClaims = net.lumalyte.lg.application.services.FrontierRaidClaims(
+                frontierConfig, get().get(), get().get(),
+                net.lumalyte.lg.infrastructure.persistence.claims.FrontierRaidClaimStoreFiles(
+                    dataFolder.toPath().resolve("frontier-raidclaims")),
+                { attacker -> get().get<net.lumalyte.lg.application.services.WarBannerService>().state(attacker) },
+            )
+            val raidClaimListener = net.lumalyte.lg.interaction.listeners.FrontierRaidClaimListener(
+                this, frontierConfig, raidClaims, get().get(), get().get(),
+                net.lumalyte.lg.infrastructure.services.FrontierRaidBannerCleanup(get().get()),
+                get().get(), get().get())
+            server.pluginManager.registerEvents(raidClaimListener, this)
+            raidClaimListener.start()
+            get().get<net.lumalyte.lg.infrastructure.listeners.WarBannerListener>().raidClaims = raidClaims
             val objectives = get().get<net.lumalyte.lg.infrastructure.services.FrontierObjectives>()
+            frontierTerritoryScoreboard = FrontierTerritoryScoreboard(
+                this, frontierConfig, get().get(), get().get(), get().get(), get().get(), raidClaims)
+            server.pluginManager.registerEvents(frontierTerritoryScoreboard!!, this)
+            frontierTerritoryScoreboard!!.start()
             val experience = net.lumalyte.lg.interaction.listeners.FrontierClaimExperience(
                 this, get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), objectives)
             get().declare(experience)
@@ -1002,9 +1020,9 @@ class LumaGuilds : JavaPlugin() {
                     val claims = get().get<net.lumalyte.lg.application.persistence.ClaimRepository>()
                     val personal = claims.getByPlayer(sender.uniqueId).filter { it.teamId == null }
                     val anchor = personal.firstOrNull { objectives.primaryAnchor(it) }
-                    if (anchor != null) tell("Solo Founding Vault: ${anchor.position.x}, ${anchor.position.y}, ${anchor.position.z}. Destroying it releases all your personal claims.")
+                    if (anchor != null) tell(if(frontierConfig.guildOnlyClaims) "Legacy solo territory retained. Create a one-person guild and use /claim migrate inside its Founding chunk." else "Solo Founding Vault: ${anchor.position.x}, ${anchor.position.y}, ${anchor.position.z}. Destroying it releases all your personal claims.")
                     else tell("Use /claim to preview a chunk, then /claimconfirm to establish your Founding Vault.")
-                    tell("Limits: ${frontierConfig.requiredHits} objective hits; personal ${get().get<net.lumalyte.lg.config.MainConfig>().personalChunkLimit} chunks; guild ${get().get<net.lumalyte.lg.config.MainConfig>().guildChunkLimit} chunks.")
+                    tell("Limits: ${frontierConfig.requiredHits} objective hits; guild ${get().get<net.lumalyte.lg.config.MainConfig>().guildChunkLimit} chunks. One-person guilds are supported.")
                 }
                 true
             }
@@ -1042,7 +1060,7 @@ class LumaGuilds : JavaPlugin() {
                 try { frontierWars.tick() } catch(failure: Exception) { logger.log(java.util.logging.Level.SEVERE,"Frontier war reconciliation pending",failure) }
             },40L,20L)
             server.pluginManager.registerEvents(objectiveListener, this)
-            val raidMining = net.lumalyte.lg.interaction.listeners.FrontierRaidMining(this, frontierConfig, get().get(), get().get(), get().get())
+            val raidMining = net.lumalyte.lg.interaction.listeners.FrontierRaidMining(this, frontierConfig, get().get(), get().get(), get().get(), raidClaims)
             server.pluginManager.registerEvents(raidMining, this)
             raidMining.start()
             val alerts = net.lumalyte.lg.interaction.listeners.FrontierAlertListener(
@@ -1071,7 +1089,7 @@ class LumaGuilds : JavaPlugin() {
                 tell("Use /claim help for territory commands and /raidinfo for the daily raid schedule (${frontierConfig.schedule.zone}).")
                 tell("During raids, attackers can destroy claims' Founding Vaults. TNT is encouraged; withers are disabled.")
                 tell("Overworld claims only; Nether travel is 1:1. Elytra, end crystals, respawn anchors, maces and totems are disabled.")
-                tell("One guild home (/guildhome, /setguildhome) or solo home (/home, /sethome). Homes are unavailable during raids or combat.")
+                tell("One shared guild home (/guildhome, /setguildhome); /home and /sethome use the same destination. Homes are unavailable during raids or combat.")
                 if (living.settings.getBoolean("decay.enabled", false)) tell("Territories lose protection after ${living.settings.getLong("decay.inactive-days", 14).coerceIn(1,3650)} inactive days. Current members' movement or interaction renews activity; builds and items remain.")
                 tell("Ordinary chat and join/leave/death notices are local. Guild and private messages keep their own audiences.")
                 tell("Above-sea Riptide cooldown: ${living.settings.getLong("combat.above-sea-riptide-cooldown-seconds",10).coerceIn(0,3600)}s. Spear/TNT-minecart player damage is capped.")
@@ -1653,6 +1671,8 @@ class LumaGuilds : JavaPlugin() {
     }
 
     override fun onDisable() {
+        frontierTerritoryScoreboard?.shutdown()
+        frontierTerritoryScoreboard = null
         // A migration failure aborts onEnable before pluginScope/Koin exist.
         // Bukkit may still invoke onDisable; there are no runtime services to tear down.
         if (!::pluginScope.isInitialized) {

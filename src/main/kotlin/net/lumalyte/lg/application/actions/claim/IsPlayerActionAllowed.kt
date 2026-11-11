@@ -27,7 +27,7 @@ class IsPlayerActionAllowed(private val playerAccessRepository: PlayerAccessRepo
             is GetClaimAtPositionResult.Success -> result.claim
         }
 
-        if (config.frontier.allows(playerActionType, java.time.Instant.now())) {
+        if (!(config.frontier.guildOnlyClaims && claim.teamId == null) && config.frontier.allows(playerActionType, java.time.Instant.now())) {
             return IsPlayerActionAllowedResult.Allowed(claim)
         }
 

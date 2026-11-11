@@ -20,10 +20,11 @@ data class FrontierConfig(
     val spawnMaxRadius: Int = 160,
     val reservedSpawnRadius: Int = 0,
     val claimTitles: Boolean = true,
-    val foreignClaimBufferChunks: Int = 1,
+    val foreignClaimBufferChunks: Int = 4,
     val endBorderSize: Int = 512,
     val raidMiningSpeed: Double = 0.35,
     val tntVaultDamage: Int = 4,
+    val guildOnlyClaims: Boolean = false,
     val serverTerritory: FrontierServerTerritory? = null,
 ) {
     init {

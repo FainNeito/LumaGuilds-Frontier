@@ -35,6 +35,9 @@ class FrontierObjectiveListener(
             objectives.soloAt(block.location) else null
         if (guild == null && (claim == null || claim.teamId != null || !objectives.primaryAnchor(claim))) return
         event.isCancelled = true // Never allow vanilla drops or the legacy destruction path.
+        if (config.frontier.guildOnlyClaims && guild == null) {
+            event.player.sendMessage(FrontierTheme.message("Migration","Legacy solo territory is protected until its owner migrates with /claim migrate.")); return
+        }
         if (guild == null && (claim!!.teamId != null || !objectives.primaryAnchor(claim))) {
             event.player.sendActionBar(FrontierTheme.message("Raid", "Raid the territory's Founding Vault."))
             return
@@ -117,7 +120,7 @@ class FrontierObjectiveListener(
             val owner = objectiveOwner(block)
             if (owner != null) {
                 blocks.remove(block) // Never allow vanilla destruction to bypass durable claim loss.
-                if (tnt && active) {
+                if (tnt && active && !(config.frontier.guildOnlyClaims && owner.type == FrontierOwnerType.PERSONAL)) {
                     try {
                         val name = vaults.getGuildForVaultChest(block.location)?.name ?: claimAt(block)?.name ?: "Solo territory"
                         val result = objectives.siege.hit(owner,FrontierObjectives.key(block.location),false,now,
@@ -126,7 +129,7 @@ class FrontierObjectiveListener(
                         if (result == FrontierSiegeResult.Defeated) fallen(owner, name, attacker)
                     } catch (failure: Exception) { plugin.logger.log(Level.SEVERE,"TNT objective cleanup pending",failure) }
                 }
-            } else if ((wither || !active) && claimAt(block) != null) blocks.remove(block)
+            } else if ((wither || !active || (config.frontier.guildOnlyClaims && claimAt(block)?.teamId == null)) && claimAt(block) != null) blocks.remove(block)
         }
     }
 

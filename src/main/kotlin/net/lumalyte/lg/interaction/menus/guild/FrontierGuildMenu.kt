@@ -69,7 +69,7 @@ object FrontierGuildMenu : KoinComponent {
         fun command(value: String) { player.performCommand(value) }
         button(1, 1, Material.WHITE_BANNER, "Guild information", listOf("View your guild and members.")) { command("guild info") }
         button(2, 2, Material.CHEST, "Guild vault", listOf("54 storage slots, available immediately.", "Use /claim to establish your Founding Vault.", "Expand into connected neighboring chunks.", "Visit the chest to access its contents.")) { command("guild getvault") }
-        button(6, 2, Material.MAP, "Territory & raids", listOf("Personal: ${config.personalChunkLimit} chunks | Guild: ${config.guildChunkLimit} chunks", "Use /claim [name] to preview a chunk.", "One territory name across every chunk.", "Your Founding Vault protects all your land.")) { command("raidinfo") }
+        button(6, 2, Material.MAP, "Territory & raids", listOf("Guild: ${config.guildChunkLimit} chunks", "Use /claim [name] to preview a chunk.", "One territory name across every chunk.", "Your Founding Vault protects all your land.")) { command("raidinfo") }
         button(4, 1, Material.WRITABLE_BOOK, "Guild chat", listOf("Toggle private guild conversation.")) { command("guild chat") }
         button(7, 1, Material.BOOK, "Guild commands", listOf("Clickable command suggestions.")) {
             listOf("create <name>", "invite <player>", "join <guild>", "invites", "kick <player>", "tag <tag>", "description <text>", "rename <name>", "leave", "disband").forEach { syntax ->
@@ -81,7 +81,7 @@ object FrontierGuildMenu : KoinComponent {
         button(2, 3, Material.ENDER_EYE, "Show claim borders", listOf("View your nearby solo and guild claims.", "Gold particles remain visible for 30 seconds.")) { command("claimoutline") }
         button(6, 3, Material.CHEST, "Pick up vault", listOf("Look at your vault and select this.", "Relocate outside the raid window.", "WARNING: packing UNCLAIMS ALL LAND.", "Stored items stay; no raid cooldown.")) { command("vaultpickup") }
         button(3, 2, Material.RED_BED, "Guild home", listOf("One shared destination inside guild land.", "Set it with /guild sethome.", "5-second warmup; unavailable during raids.")) { command("guildhome") }
-        button(5, 2, Material.WHITE_BED, "Personal home", listOf("One destination inside your solo claims.", "Set it with /sethome.", "Movement or damage cancels teleporting.")) { command("home") }
+        button(5, 2, Material.WHITE_BED, "Claim map", listOf("Toggle the nearby territory map.", "Uses available scoreboard space." )) { command("claimmap") }
         button(1, 4, Material.GRASS_BLOCK, "Walking autoclaim", listOf("Review and confirm /autoclaim.", "Claim connected chunks as you walk.", "Use /autoclaim off to stop.")) { command("autoclaim") }
         button(3, 4, Material.SHEARS, "Unclaim this chunk", listOf("Preview removing your current chunk.", "Confirm with /unclaim confirm.", "Cannot remove a bridge or Founding chunk.")) { command("unclaim") }
         button(5, 4, Material.RED_BANNER, "War banner", listOf("Raid window only. One use per guild per 24h.", "Lasts up to 15 minutes; 20 damage points.", "Guild members: /guild warbanner tp")) { command("guild warbanner") }

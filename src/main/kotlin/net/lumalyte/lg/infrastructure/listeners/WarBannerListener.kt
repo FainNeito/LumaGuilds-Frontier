@@ -2,6 +2,7 @@ package net.lumalyte.lg.infrastructure.listeners
 
 import net.badgersmc.nexus.i18n.LangService
 import net.lumalyte.lg.application.services.GuildService
+import net.lumalyte.lg.application.services.FrontierRaidClaims
 import net.lumalyte.lg.application.services.WarBannerPlacementResult
 import net.lumalyte.lg.application.services.WarBannerService
 import net.lumalyte.lg.common.PluginKeys
@@ -28,6 +29,8 @@ class WarBannerListener(
     private val frontier: net.lumalyte.lg.config.FrontierConfig = net.lumalyte.lg.config.FrontierConfig(),
     private val clock: () -> Long = System::currentTimeMillis,
 ) : Listener {
+    /** Set during Frontier startup; SMP deliberately leaves this unset. */
+    var raidClaims: FrontierRaidClaims? = null
     private data class Damage(var hits: Int, var last: Long)
     private val damage = mutableMapOf<UUID, Damage>()
 
@@ -96,6 +99,15 @@ class WarBannerListener(
             reject(event, net.lumalyte.lg.interaction.listeners.FrontierTheme.message("War banner", "Place war banners inside the Overworld border."))
             return
         }
+        if (frontier.enabled) {
+            val position = net.lumalyte.lg.domain.values.FrontierChunk.atBlock(block.world.uid, block.x, block.z)
+            val now = clock()
+            if (raidClaims?.forGuild(guildId, now)?.chunk != position) {
+                reject(event, net.lumalyte.lg.interaction.listeners.FrontierTheme.message("War banner",
+                    "Place your war banner inside your active one-chunk raid claim. Use /raidclaim first.", true))
+                return
+            }
+        }
         val result = core.place(
             transactionId = UUID.randomUUID(),
             playerId = player.uniqueId,
@@ -104,9 +116,16 @@ class WarBannerListener(
             x = block.x,
             y = block.y,
             z = block.z,
-            now = System.currentTimeMillis(),
+            now = clock(),
         ) { state ->
-            bukkit.renderPlaced(block, guild, state)
+            if (!bukkit.renderPlaced(block, guild, state)) false
+            else if (!frontier.enabled || runCatching { raidClaims?.bind(state, clock()) == true }
+                    .onFailure { Bukkit.getLogger().log(java.util.logging.Level.SEVERE, "Raid banner binding failed", it) }
+                    .getOrDefault(false)) true
+            else {
+                bukkit.removePhysical(state)
+                false
+            }
         }
 
         when (result) {
@@ -223,6 +242,8 @@ class WarBannerListener(
     }
 
     private fun broadcastDestroyed(state: WarBannerState) {
+        if (frontier.enabled) try { raidClaims?.removeBanner(state) }
+        catch (failure: Exception) { Bukkit.getLogger().log(java.util.logging.Level.SEVERE, "Raid claim cleanup failed; retrying", failure) }
         val guildName = guildService.getGuild(state.guildId)?.name
             ?: state.guildId.toString().take(8)
         broadcast(lang.msg("war_banner.broadcast.destroyed", "guild" to guildName))

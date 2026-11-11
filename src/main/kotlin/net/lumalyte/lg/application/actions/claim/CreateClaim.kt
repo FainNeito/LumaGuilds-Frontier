@@ -76,6 +76,7 @@ class CreateClaim(private val claimRepository: ClaimRepository, private val part
     }
     fun executeFrontier(playerId: UUID, name: String, position: Position3D, worldId: UUID, guildId: UUID? = null): net.lumalyte.lg.application.results.claim.CreateClaimResult {
         check(config.frontier.enabled)
+        if (config.frontier.guildOnlyClaims && guildId == null) return net.lumalyte.lg.application.results.claim.CreateClaimResult.InvalidLocation
         if (guildId == null && guildService.getPlayerGuilds(playerId).any { ranks?.getPlayerRank(playerId,it.id)?.priority == 0 })
             return net.lumalyte.lg.application.results.claim.CreateClaimResult.InvalidLocation
         val owner = if (guildId == null) net.lumalyte.lg.application.services.FrontierOwner(net.lumalyte.lg.application.services.FrontierOwnerType.PERSONAL, playerId)

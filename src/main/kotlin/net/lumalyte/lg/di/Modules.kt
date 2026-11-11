@@ -504,7 +504,7 @@ fun guildsModule() = module {
             },
         ).apply {
             mayBecomeOwner = { playerId ->
-                !get<net.lumalyte.lg.config.MainConfig>().frontier.enabled ||
+                !get<net.lumalyte.lg.config.MainConfig>().frontier.enabled || get<net.lumalyte.lg.config.MainConfig>().frontier.guildOnlyClaims ||
                     get<net.lumalyte.lg.application.persistence.ClaimRepository>().getByPlayer(playerId).none { it.teamId == null }
             }
         }

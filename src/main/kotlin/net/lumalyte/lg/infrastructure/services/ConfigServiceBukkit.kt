@@ -40,8 +40,9 @@ class ConfigServiceBukkit(private val configProvider: () -> FileConfiguration): 
             raidMiningSpeed = config.getDouble("frontier.siege.raid_mining_speed", 0.35),
             tntVaultDamage = config.getInt("frontier.siege.tnt_vault_damage", 4),
             claimTitles = config.getBoolean("frontier.claims.entry_titles", true),
-            foreignClaimBufferChunks = config.getInt("frontier.claims.buffer_chunks", 1),
+            foreignClaimBufferChunks = config.getInt("frontier.claims.buffer_chunks", 4),
             endBorderSize = config.getInt("frontier.world.end_border_size", 512),
+            guildOnlyClaims = config.getBoolean("frontier.claims.guild_only", true),
             serverTerritory = if (config.getBoolean("frontier.server_territory.enabled", true)) FrontierServerTerritory(
                 name = config.getString("frontier.server_territory.name", "Watcher's Ruin")!!,
                 minChunkX = config.getInt("frontier.server_territory.min_chunk_x", -8),

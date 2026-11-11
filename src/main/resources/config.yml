@@ -76,11 +76,12 @@ frontier:
   # Development mode: use only on a fresh isolated server. Restart after changes.
   # Isolated testing profile; do not enable against an existing SMP database.
   claims:
+    guild_only: true
     # Zero disables the square spawn reservation; world border still applies.
     reserved_spawn_radius: 0
     entry_titles: true
     # Empty chunks required between unrelated claim owners.
-    buffer_chunks: 1
+    buffer_chunks: 4
   enabled: false
   raid:
     timezone: UTC

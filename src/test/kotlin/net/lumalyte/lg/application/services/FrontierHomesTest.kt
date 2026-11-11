@@ -76,8 +76,18 @@ class FrontierHomesTest {
             every { members.hasPermission(any(),any(),any()) } returns true
             player.teleport(destination)
         }
-        fun homes() = FrontierHomes(plugin,FrontierConfig(enabled=true),claims,partitions,guilds,members) { now }
+        fun homes(guildOnly: Boolean=false) = FrontierHomes(plugin,FrontierConfig(enabled=true,guildOnlyClaims=guildOnly),claims,partitions,guilds,members) { now }
         fun advance() { now=now.plusSeconds(6) }
+    }
+    @Test fun `home aliases share guild slot and cannot bypass setting permission`() = scenario {
+        claim=claim.copy(teamId=guild.id)
+        val h=homes(true)
+        h.command(player,false,true)
+        player.teleport(origin)
+        every { members.hasPermission(any(),any(),any()) } returns false
+        h.command(player,false,true)
+        h.command(player,true,false); advance(); h.tick()
+        assertEquals(destination,player.location)
     }
     @Test fun `single personal slot survives reload and replacing it changes destination`() = scenario {
         homes().command(player,false,true)

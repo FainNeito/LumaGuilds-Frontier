@@ -87,6 +87,7 @@ class FrontierHomes(
         (plugin.server.pluginManager.isPluginEnabled("CombatLogX") && net.lumalyte.lg.utils.CombatUtil.isInCombat(player))
 
     fun command(player: Player, guild: Boolean, set: Boolean) {
+        if (config.guildOnlyClaims && !guild) { command(player,true,set); return }
         if (blocked(player)) { tell(player, "Homes are unavailable during raids or combat."); return }
         val owner = owner(player, guild) ?: run { tell(player, "Join a guild with claimed land first."); return }
         val foundation = territory.foundation(owner) ?: run { tell(player, "Establish your Founding Vault before setting a home."); return }
