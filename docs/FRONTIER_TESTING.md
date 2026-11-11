@@ -1,5 +1,12 @@
 # Frontier isolated test server
 
+## Sidebar territory map (pending isolated acceptance)
+
+- Frontier displays an **11×11 chunk map** in the otherwise unused sidebar, centered on the player's current chunk (gold diamond), with north at the top. Vanilla-font colorized square glyphs stand in for colored-square emojis, which Minecraft does not reliably render. Green = own guild/personal land, blue = allied guild, red = other territory, yellow = active forward raid claim, light gray = wilderness, dark gray = unclaimable border or spawn reservation.
+- The map refreshes immediately when entering another chunk, including teleports and negative chunk coordinates. It also refreshes every **15 seconds** to reflect claims, unclaims, diplomacy, and raid-banner removal while stationary. The bottom line reports chunk X/Z; the legend occupies two lines.
+- It appears **only in the configured Frontier world**. If another plugin already owns the sidebar, Frontier does not replace it. The player's previous scoreboard is restored when leaving Frontier, quitting or unloading LumaGuilds. TAB's sidebar remains disabled in `ci/frontier/TAB/config.yml`.
+- Manual acceptance: compare the 11×11 cardinal directions with actual claimed and unclaimed chunks; cross a chunk border in each direction, teleport between worlds, stand still while someone unclaims land, bind/destroy a raid banner, and verify no sidebar hijack if TAB or a different plugin enables one. The scoreboard UI itself needs a live Minecraft client check.
+
 ## Raid-claim feature branch (pending isolated acceptance)
 
 - During the daily raid hour, an authorized guild officer (both `MANAGE_CLAIMS` and `PLACE_WAR_BANNER`) stands in an **unclaimed** chunk directly **edge-adjacent** to another guild's permanent land and runs `/raidclaim`. `/raidclaim <target guild>` resolves a corner with more than one neighboring guild. `/raidclaim confirm` creates one temporary forward claim; `/raidclaim cancel` dismisses the preview.

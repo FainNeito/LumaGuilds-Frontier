@@ -56,6 +56,7 @@ class LumaGuilds : JavaPlugin() {
     private var liteBansStrikeHookRegistered = false
     private var enthusiaStaffStrikeFeed: AutoCloseable? = null
     private var inviteBlockLifecycle: net.lumalyte.lg.application.services.DurableInviteBlockService? = null
+    private var frontierTerritoryScoreboard: FrontierTerritoryScoreboard? = null
     internal lateinit var vaultProtectionListener: net.lumalyte.lg.infrastructure.listeners.VaultProtectionListener
     internal var enabledAtMillis: Long = 0L
         private set
@@ -983,6 +984,10 @@ class LumaGuilds : JavaPlugin() {
             server.pluginManager.registerEvents(raidClaimListener, this)
             raidClaimListener.start()
             get().get<net.lumalyte.lg.infrastructure.listeners.WarBannerListener>().raidClaims = raidClaims
+            frontierTerritoryScoreboard = FrontierTerritoryScoreboard(
+                this, frontierConfig, get().get(), get().get(), get().get(), get().get(), raidClaims)
+            server.pluginManager.registerEvents(frontierTerritoryScoreboard!!, this)
+            frontierTerritoryScoreboard!!.start()
             val objectives = get().get<net.lumalyte.lg.infrastructure.services.FrontierObjectives>()
             val experience = net.lumalyte.lg.interaction.listeners.FrontierClaimExperience(
                 this, get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), objectives)
@@ -1596,6 +1601,8 @@ class LumaGuilds : JavaPlugin() {
     }
 
     override fun onDisable() {
+        frontierTerritoryScoreboard?.shutdown()
+        frontierTerritoryScoreboard = null
         // A migration failure aborts onEnable before pluginScope/Koin exist.
         // Bukkit may still invoke onDisable; there are no runtime services to tear down.
         if (!::pluginScope.isInitialized) {
