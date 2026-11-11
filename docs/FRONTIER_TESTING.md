@@ -1,5 +1,16 @@
 # Frontier isolated test server
 
+## Raid-claim feature branch (pending isolated acceptance)
+
+- During the daily raid hour, an authorized guild officer (both `MANAGE_CLAIMS` and `PLACE_WAR_BANNER`) stands in an **unclaimed** chunk directly **edge-adjacent** to another guild's permanent land and runs `/raidclaim`. `/raidclaim <target guild>` resolves a corner with more than one neighboring guild. `/raidclaim confirm` creates one temporary forward claim; `/raidclaim cancel` dismisses the preview.
+- The attacking guild has at most one active one-chunk raid claim. It ignores the regular empty-chunk separation rule **only for this temporary position**. Diagonal adjacency, solo-land targeting, other dimensions, occupied land, spawn reservations, and out-of-border chunks are rejected.
+- Place the guild war banner **inside that chunk** within two minutes. `/raidclaim status` shows its state; `/raidclaim abandon` removes an **unbannered** staging claim. The banner is not placeable outside the active forward claim.
+- A banner-bound claim lasts only while that exact banner is active. Destroying the war banner, its normal 15-minute expiry, or raid-hour close ends the forward claim. The claim is never inserted into permanent claim/partition records. Staging records are persisted under `plugins/LumaGuilds/frontier-raidclaims` and reconciled after restart.
+- Enemy mining in the raid claim uses the existing 35% speed modifier. Spawners and guild Founding Vaults cannot be placed there. Defenders can counterattack the physical banner; raiders retain the existing once-per-24-hour war-banner cooldown.
+- Isolated acceptance: (1) edge vs diagonal and same-owner/solo neighbors; (2) mixed-guild border requiring an explicit target; (3) timed confirmation/grace; (4) outsider mining and banner-only placement; (5) 20-point banner destruction and TNT; (6) normal expiry and raid-window end; (7) restart before/after banner binding; (8) guild disband/vault defeat and physical banner disappearance; (9) out-of-window and world-border failures; (10) ensure SMP behavior is unchanged.
+
+**Do not deploy from this branch yet.** A Java 25/Gradle 9.1 build, automated tests, and live two-guild acceptance are required. Any concurrent change to normal claim availability during a raid must also reject permanent claims on active temporary raid-claim chunks.
+
 ## Current rules: test.10 (supersedes earlier claim/pickup instructions)
 
 - `/claim [name]` previews a chunk; `/claim confirm` establishes a Founding Vault (guild chest or solo barrel). Further claims expand edge-connected land from that founding chunk; no additional bells or vaults are placed. Ordinary bells are decorative.

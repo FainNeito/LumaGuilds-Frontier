@@ -34,6 +34,9 @@ commands:
   raidinfo:
     description: Show Frontier raid timing and your primary solo anchor
     usage: /raidinfo
+  raidclaim:
+    description: Stage a temporary one-chunk forward claim beside an enemy guild
+    usage: /raidclaim [target guild|confirm|cancel|abandon|status]
   guild:
     description: Guild management commands
     usage: /guild <subcommand> [args]

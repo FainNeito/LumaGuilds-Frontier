@@ -971,6 +971,17 @@ class LumaGuilds : JavaPlugin() {
             server.pluginManager.registerEvents(rules, this)
             server.worlds.forEach(rules::configure)
             rules.start(this)
+            val raidClaims = net.lumalyte.lg.application.services.FrontierRaidClaims(
+                frontierConfig, get().get(), get().get(),
+                net.lumalyte.lg.infrastructure.persistence.claims.FrontierRaidClaimStoreFiles(
+                    dataFolder.toPath().resolve("frontier-raidclaims")),
+                { attacker -> get().get<net.lumalyte.lg.application.services.WarBannerService>().state(attacker) },
+            )
+            val raidClaimListener = net.lumalyte.lg.interaction.listeners.FrontierRaidClaimListener(
+                this, frontierConfig, raidClaims, get().get(), get().get())
+            server.pluginManager.registerEvents(raidClaimListener, this)
+            raidClaimListener.start()
+            get().get<net.lumalyte.lg.infrastructure.listeners.WarBannerListener>().raidClaims = raidClaims
             val objectives = get().get<net.lumalyte.lg.infrastructure.services.FrontierObjectives>()
             val experience = net.lumalyte.lg.interaction.listeners.FrontierClaimExperience(
                 this, get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), objectives)
@@ -1006,7 +1017,7 @@ class LumaGuilds : JavaPlugin() {
             server.pluginManager.registerEvents(
                 net.lumalyte.lg.interaction.listeners.FrontierObjectiveListener(
                     objectives, get().get(), get().get(), get().get(), this, get().get(), get().get()), this)
-            val raidMining = net.lumalyte.lg.interaction.listeners.FrontierRaidMining(this, frontierConfig, get().get(), get().get(), get().get())
+            val raidMining = net.lumalyte.lg.interaction.listeners.FrontierRaidMining(this, frontierConfig, get().get(), get().get(), get().get(), raidClaims)
             server.pluginManager.registerEvents(raidMining, this)
             raidMining.start()
             val alerts = net.lumalyte.lg.interaction.listeners.FrontierAlertListener(
