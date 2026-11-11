@@ -959,6 +959,11 @@ class LumaGuilds : JavaPlugin() {
         val frontierConfig = get().get<ConfigService>().loadConfig().frontier
         net.lumalyte.lg.interaction.listeners.FrontierTheme.enabled = frontierConfig.enabled
         if (frontierConfig.enabled) {
+            val roleResolver = get().get<net.lumalyte.lg.application.services.GuildRolePermissionResolver>() as net.lumalyte.lg.infrastructure.services.GuildRolePermissionResolverBukkit
+            val rankAccess = net.lumalyte.lg.infrastructure.services.FrontierRankClaimPermissions(
+                dataFolder.resolve("frontier-rank-permissions.yml"), get().get(), roleResolver::permissionsForRank, roleResolver::invalidateGuildCache)
+            roleResolver.frontierPermissionOverride = rankAccess::get
+            get().declare(rankAccess)
             val rules = net.lumalyte.lg.interaction.listeners.FrontierServerRules(frontierConfig) { player ->
                 net.lumalyte.lg.interaction.menus.guild.FrontierGuildMenu.open(player, get().get<ConfigService>().loadConfig())
             }
@@ -968,7 +973,17 @@ class LumaGuilds : JavaPlugin() {
             server.pluginManager.registerEvents(homes, this)
             homes.start()
             rules.homeAction = { player, set -> homes.command(player, true, set) }
+            rules.ranksAction = { player -> net.lumalyte.lg.interaction.menus.guild.FrontierRanksMenu.open(player) }
+            rules.warAction = { player -> net.lumalyte.lg.interaction.menus.guild.FrontierWarMenu.open(player) }
             server.pluginManager.registerEvents(rules, this)
+            server.worlds.forEach { rules.removeWithers(it.entities) }
+            frontierConfig.serverTerritory?.let { territory ->
+                val repository = get().get<net.lumalyte.lg.application.persistence.ClaimRepository>()
+                val partitions = get().get<net.lumalyte.lg.application.persistence.PartitionRepository>()
+                val world = server.getWorld(frontierConfig.worldName)
+                val overlaps = repository.getAll().filter { it.worldId == world?.uid && partitions.getByClaim(it.id).any { part -> territory.overlaps(part.area) } }
+                if (overlaps.isNotEmpty()) logger.warning("${territory.name} overlaps ${overlaps.size} existing player/guild claim(s). Existing protections retained; resolve overlaps before opening this area publicly.")
+            }
             server.worlds.forEach(rules::configure)
             rules.start(this)
             val objectives = get().get<net.lumalyte.lg.infrastructure.services.FrontierObjectives>()
@@ -982,7 +997,7 @@ class LumaGuilds : JavaPlugin() {
                 val now = java.time.Instant.now()
                 val state = frontierConfig.schedule.stateAt(now)
                 tell("Raid ${if (state.active) "ACTIVE until" else "opens at"} ${state.nextTransition}; schedule zone ${frontierConfig.schedule.zone}.")
-                tell("Founding Vault: ${frontierConfig.requiredHits} damage points; TNT ${frontierConfig.tntVaultDamage} per exposed blast; raider mining ${(frontierConfig.raidMiningSpeed * 100).toInt()}%. Wither raiding disabled.")
+                tell("Founding Vault: ${frontierConfig.requiredHits} damage points; TNT ${frontierConfig.tntVaultDamage} per exposed blast; raider mining ${(frontierConfig.raidMiningSpeed * 100).toInt()}%. Withers disabled.")
                 if (sender is org.bukkit.entity.Player) {
                     val claims = get().get<net.lumalyte.lg.application.persistence.ClaimRepository>()
                     val personal = claims.getByPlayer(sender.uniqueId).filter { it.teamId == null }
@@ -1003,9 +1018,30 @@ class LumaGuilds : JavaPlugin() {
                     logger.log(java.util.logging.Level.SEVERE, "Frontier recovery pending; retrying in 10 seconds", failure)
                 }
             }, 1L, 200L)
-            server.pluginManager.registerEvents(
-                net.lumalyte.lg.interaction.listeners.FrontierObjectiveListener(
-                    objectives, get().get(), get().get(), get().get(), this, get().get(), get().get()), this)
+            val objectiveListener = net.lumalyte.lg.interaction.listeners.FrontierObjectiveListener(
+                objectives, get().get(), get().get(), get().get(), this, get().get(), get().get())
+            val frontierWars = net.lumalyte.lg.infrastructure.services.FrontierWars(
+                dataFolder.resolve("frontier-wars.yml"),frontierConfig,get().get(),get().get(),get().get(),get().get(),
+                { war, message ->
+                    server.broadcast(net.lumalyte.lg.interaction.listeners.FrontierTheme.message("War",message))
+                    if(war.reason!=null && war.winner!=null) {
+                        val members=get().get<net.lumalyte.lg.application.services.MemberService>()
+                        server.onlinePlayers.forEach { player ->
+                            val groups=members.getPlayerGuilds(player.uniqueId)
+                            if(groups.any(war::involves)) {
+                                val won=war.winner in groups
+                                net.lumalyte.lg.interaction.listeners.FrontierFeedback.show(player,if(won) "victory" else "defeat",
+                                    if(won) "WAR VICTORY" else "WAR DEFEAT",war.reason,important=true,danger=!won)
+                            }
+                        }
+                    }
+                })
+            get().declare(frontierWars)
+            objectiveListener.frontierWars=frontierWars
+            server.scheduler.runTaskTimer(this,Runnable {
+                try { frontierWars.tick() } catch(failure: Exception) { logger.log(java.util.logging.Level.SEVERE,"Frontier war reconciliation pending",failure) }
+            },40L,20L)
+            server.pluginManager.registerEvents(objectiveListener, this)
             val raidMining = net.lumalyte.lg.interaction.listeners.FrontierRaidMining(this, frontierConfig, get().get(), get().get(), get().get())
             server.pluginManager.registerEvents(raidMining, this)
             raidMining.start()
@@ -1013,6 +1049,39 @@ class LumaGuilds : JavaPlugin() {
                 this, frontierConfig, get().get(), get().get())
             server.pluginManager.registerEvents(alerts, this)
             alerts.start()
+            val living = net.lumalyte.lg.interaction.listeners.FrontierLivingWorld(this)
+            (get().get<net.lumalyte.lg.application.services.RelationService>() as net.lumalyte.lg.infrastructure.services.RelationServiceBukkit).allianceLimit =
+                living.settings.getInt("diplomacy.max-allies",1).coerceIn(0,20)
+            (get().get<net.lumalyte.lg.application.services.MemberService>() as net.lumalyte.lg.infrastructure.services.MemberServiceBukkit).apply {
+                frontierMemberLimit = living.settings.getInt("guilds.max-members",6).coerceIn(1,100)
+                frontierRosterLocked = {
+                    living.settings.getBoolean("guilds.lock-roster-during-raids",true) && frontierConfig.schedule.stateAt(java.time.Instant.now()).active
+                }
+            }
+            rules.rosterLocked = (get().get<net.lumalyte.lg.application.services.MemberService>() as net.lumalyte.lg.infrastructure.services.MemberServiceBukkit).frontierRosterLocked
+            server.pluginManager.registerEvents(living, this)
+            val notifications = net.lumalyte.lg.interaction.listeners.FrontierRaidNotifications(this, living.settings, get().get())
+            notifications.start()
+            alerts.raidNotifications = notifications
+            objectiveListener.raidNotifications = notifications
+            for (command in listOf("serverinfo", "rules")) getCommand(command)?.setExecutor { sender, _, _, _ ->
+                fun tell(text: String) = sender.sendMessage(net.lumalyte.lg.interaction.listeners.FrontierTheme.message("Frontier", text))
+                tell("A ${frontierConfig.borderSize} × ${frontierConfig.borderSize} world. Explore, make allies, and defend your Founding Vault.")
+                frontierConfig.serverTerritory?.let { tell("${it.name} is public server territory around spawn. Building and PvP are allowed; claiming is disabled.") }
+                tell("Use /claim help for territory commands and /raidinfo for the daily raid schedule (${frontierConfig.schedule.zone}).")
+                tell("During raids, attackers can destroy claims' Founding Vaults. TNT is encouraged; withers are disabled.")
+                tell("Overworld claims only; Nether travel is 1:1. Elytra, end crystals, respawn anchors, maces and totems are disabled.")
+                tell("One guild home (/guildhome, /setguildhome) or solo home (/home, /sethome). Homes are unavailable during raids or combat.")
+                if (living.settings.getBoolean("decay.enabled", false)) tell("Territories lose protection after ${living.settings.getLong("decay.inactive-days", 14).coerceIn(1,3650)} inactive days. Current members' movement or interaction renews activity; builds and items remain.")
+                tell("Ordinary chat and join/leave/death notices are local. Guild and private messages keep their own audiences.")
+                tell("Above-sea Riptide cooldown: ${living.settings.getLong("combat.above-sea-riptide-cooldown-seconds",10).coerceIn(0,3600)}s. Spear/TNT-minecart player damage is capped.")
+                true
+            }
+            val decay = net.lumalyte.lg.interaction.listeners.FrontierClaimDecay(
+                this, living.settings, get().get(), get().get(), get().get())
+            server.pluginManager.registerEvents(decay, this)
+            decay.raidNotifications = notifications
+            decay.start()
         }
         server.pluginManager.registerEvents(BlockLaunchListener(this), this)
         server.pluginManager.registerEvents(ClaimAnchorListener(), this)

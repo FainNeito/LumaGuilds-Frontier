@@ -42,6 +42,13 @@ class ConfigServiceBukkit(private val configProvider: () -> FileConfiguration): 
             claimTitles = config.getBoolean("frontier.claims.entry_titles", true),
             foreignClaimBufferChunks = config.getInt("frontier.claims.buffer_chunks", 1),
             endBorderSize = config.getInt("frontier.world.end_border_size", 512),
+            serverTerritory = if (config.getBoolean("frontier.server_territory.enabled", true)) FrontierServerTerritory(
+                name = config.getString("frontier.server_territory.name", "Watcher's Ruin")!!,
+                minChunkX = config.getInt("frontier.server_territory.min_chunk_x", -8),
+                maxChunkX = config.getInt("frontier.server_territory.max_chunk_x", 7),
+                minChunkZ = config.getInt("frontier.server_territory.min_chunk_z", -8),
+                maxChunkZ = config.getInt("frontier.server_territory.max_chunk_z", 7),
+            ) else null,
         )
     }
 

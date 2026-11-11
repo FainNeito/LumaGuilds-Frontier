@@ -32,6 +32,9 @@ class MemberServiceBukkit(
     private val invalidateClaimPermissionCache: (UUID) -> Unit = {},
 ) : MemberService {
 
+    var frontierMemberLimit: Int? = null
+    var frontierRosterLocked: () -> Boolean = { false }
+
     var mayBecomeOwner: (UUID) -> Boolean = { true }
     private val logger = LoggerFactory.getLogger(MemberServiceBukkit::class.java)
 
@@ -41,6 +44,7 @@ class MemberServiceBukkit(
 
     override fun getMemberLimits(guildIds: Set<UUID>): Map<UUID, Int> {
         if (guildIds.isEmpty()) return emptyMap()
+        frontierMemberLimit?.let { limit -> return guildIds.associateWith { limit.coerceAtLeast(1) } }
         val levelRewards by lazy { progressionConfigService.getProgressionConfig().getActiveLevelRewards() }
         return guildIds.associateWith { guildId ->
             guildRewards?.entitlementsIfEnabled(guildId)?.let { return@associateWith it.memberCapacity }
@@ -55,7 +59,9 @@ class MemberServiceBukkit(
         }
     }
     
+    @Synchronized
     override fun addMember(playerId: UUID, guildId: UUID, rankId: UUID): Member? {
+        if (frontierRosterLocked()) return null
         // Check if guild exists
         if (guildRepository.getById(guildId) == null) {
             logger.warn("Attempted to add member to non-existent guild: $guildId")
@@ -124,7 +130,9 @@ class MemberServiceBukkit(
         return null
     }
     
+    @Synchronized
     override fun removeMember(playerId: UUID, guildId: UUID, actorId: UUID): Boolean {
+        if (actorId != playerId && frontierRosterLocked()) return false
         // Check if actor has permission to manage members
         // EXCEPTION: Players can always leave voluntarily (remove themselves)
         if (actorId != playerId && !hasPermission(actorId, guildId, RankPermission.MANAGE_MEMBERS)) {

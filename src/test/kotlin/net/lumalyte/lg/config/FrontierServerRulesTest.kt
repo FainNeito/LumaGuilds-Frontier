@@ -14,6 +14,18 @@ import java.time.Duration
 import kotlin.test.*
 
 class FrontierServerRulesTest {
+    @Test fun `withers cannot spawn and loaded withers are removed without touching other mobs`() {
+        val rules=FrontierServerRules(FrontierConfig(enabled=true))
+        val wither=mockk<org.bukkit.entity.Wither>(relaxed=true)
+        val cow=mockk<org.bukkit.entity.Cow>(relaxed=true)
+        val spawn=org.bukkit.event.entity.CreatureSpawnEvent(wither,org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.BUILD_WITHER)
+        rules.onWitherSpawn(spawn)
+        assertTrue(spawn.isCancelled)
+        rules.removeWithers(listOf(wither,cow))
+        verify(exactly=1) { wither.remove() }
+        verify(exactly=0) { cow.remove() }
+    }
+
     @Test fun `war banner grant and rally commands reach the permission checked command handler`() {
         val player = mockk<org.bukkit.entity.Player>(relaxed = true)
         val open = mockk<(org.bukkit.entity.Player) -> Unit>(relaxed = true)

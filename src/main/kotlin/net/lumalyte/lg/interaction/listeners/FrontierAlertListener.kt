@@ -32,12 +32,14 @@ class FrontierAlertListener(
     private val claims: GetClaimAtPosition,
     private val guilds: GuildService,
 ) : Listener {
+    var raidNotifications: FrontierRaidNotifications? = null
     private data class AlertKey(val claim: UUID, val actor: UUID, val kind: String)
     private val recentAlerts = mutableMapOf<AlertKey, Instant>()
     private var previousActive: Boolean? = null
     private var previousRemaining: Long? = null
 
     fun start() {
+        FrontierFeedback.initialize(plugin)
         registerTabCountdown()
         plugin.server.scheduler.runTaskTimer(plugin, Runnable { tick() }, 1L, 20L)
     }
@@ -51,13 +53,16 @@ class FrontierAlertListener(
                 "The raid window is open. Claims are vulnerable."
                 else "The raid window has closed. Claim protection is restored.", state.active))
             plugin.server.onlinePlayers.forEach {
-                if (state.active) FrontierTheme.alarm(plugin, it)
-                else it.playSound(it.location, org.bukkit.Sound.BLOCK_NOTE_BLOCK_CHIME, 0.4f, 1.2f)
+                FrontierFeedback.show(it, if (state.active) "raid-open" else "raid-close",
+                    if (state.active) "RAIDS HAVE BEGUN" else "CLAIMS PROTECTED",
+                    if (state.active) "Defend your Founding Vault" else "The raid window has ended",
+                    danger = state.active, important = true)
             }
         } else if (previousActive == state.active) {
             for (warning in listOf(900L, 300L, 60L)) {
                 if ((previousRemaining ?: 0) > warning && seconds <= warning) {
                     plugin.server.broadcast(FrontierTheme.message("Raid", "Raid window ${if (state.active) "closes" else "opens"} in ${warning / 60} minute(s).", true))
+                    plugin.server.onlinePlayers.forEach { FrontierFeedback.show(it, "raid-warning", "", "", title = false) }
                 }
             }
         }
@@ -98,6 +103,10 @@ class FrontierAlertListener(
         event.player.sendMessage(FrontierTheme.message("Raid", "${countdown(now)}. ${if (state.active) "Protection returns" else "Raids start"} at $time (${config.schedule.zone.id}).", state.active))
     }
 
+    private fun publicTerritoryAt(location: Location) = config.serverTerritory?.takeIf {
+        location.world.name == config.worldName && it.contains(location.blockX,location.blockZ)
+    }
+
     private fun claimAt(location: Location): Claim? =
         (claims.execute(location.world.uid, Position2D(location.blockX, location.blockZ))
             as? GetClaimAtPositionResult.Success)?.claim
@@ -112,14 +121,24 @@ class FrontierAlertListener(
         val from = event.from
         if (from.world.uid == to.world.uid && (from.blockX shr 4) == (to.blockX shr 4) &&
             (from.blockZ shr 4) == (to.blockZ shr 4)) return
-        val claim = claimAt(to) ?: return
-        if (claimAt(from)?.id == claim.id) return
-        if (config.claimTitles) {
+        val claim = claimAt(to)
+        val publicTerritory = publicTerritoryAt(to)
+        if (claim == null && publicTerritory != null) {
+            if (publicTerritoryAt(from) == null) {
+                FrontierFeedback.show(event.player,"claim-enter",publicTerritory.name,"Server territory · Open to everyone",title=config.claimTitles)
+                event.player.sendMessage(FrontierTheme.message("Territory", "Entering ${publicTerritory.name}. Building and PvP allowed; claiming disabled."))
+            }
+            return
+        }
+        if (claim == null) return
+        val previous = claimAt(from)
+        if (previous != null && previous.teamId == claim.teamId &&
+            (claim.teamId != null || previous.playerId == claim.playerId)) return
+        run {
             val owner = claim.teamId?.let { guilds.getGuild(it)?.name }
                 ?: (org.bukkit.Bukkit.getOfflinePlayer(claim.playerId).name ?: "Solo claim")
-            event.player.showTitle(net.kyori.adventure.title.Title.title(
-                FrontierTheme.heading(claim.name), Component.text(owner, FrontierTheme.cream),
-                net.kyori.adventure.title.Title.Times.times(Duration.ofMillis(250), Duration.ofSeconds(2), Duration.ofMillis(500))))
+            FrontierFeedback.show(event.player, "claim-enter", claim.name,
+                if (claim.teamId != null) "Guild · $owner" else "Claim of $owner", title = config.claimTitles)
         }
         if (member(event.player, claim)) return
         event.player.sendMessage(FrontierTheme.message("Claim", "Entering ${claim.name}."))
@@ -155,13 +174,16 @@ class FrontierAlertListener(
 
     private fun alert(claim: Claim, actor: Player, location: Location, kind: String) {
         val now = Instant.now()
-        val key = AlertKey(claim.id, actor.uniqueId, if (kind == "entered") "entry" else "raid")
+        val key = AlertKey(claim.teamId ?: claim.playerId, actor.uniqueId, if (kind == "entered") "entry" else "raid")
         if (recentAlerts[key]?.let { Duration.between(it, now).seconds < 30 } == true) return
         recentAlerts[key] = now
         val message = "[Claim alert] ${actor.name} $kind at ${claim.name}, chunk ${location.blockX shr 4}, ${location.blockZ shr 4} (${location.world.name})."
+        if (kind != "entered") raidNotifications?.notify(net.lumalyte.lg.application.services.FrontierReplacementPolicy.ownerOf(claim), "raid", message)
         plugin.server.onlinePlayers.filter { member(it, claim) }.forEach {
             it.sendMessage(FrontierTheme.message(if (kind == "entered") "Claim" else "Raid", message.substringAfter("] "), kind != "entered"))
-            if (kind != "entered") FrontierTheme.alarm(plugin, it)
+            FrontierFeedback.show(it, if (kind == "entered") "visitor" else "raid",
+                if (kind == "entered") "VISITOR IN YOUR CLAIM" else "CLAIM UNDER ATTACK",
+                "${actor.name} · ${claim.name}", danger = kind != "entered", title = kind != "entered", important = kind != "entered")
         }
         plugin.logger.info(message)
     }

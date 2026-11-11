@@ -9,6 +9,12 @@ softdepend: [TAB, Vault, PlaceholderAPI, LiteBans, EnthusiaStaff, EnthusiaPlayti
 depend: [RoseChat]
 
 commands:
+  raidalerts:
+    description: Set optional linked Discord raid alert preference
+  serverinfo:
+    description: Frontier survival and territory guide
+  rules:
+    description: Frontier gameplay rules
   unclaim:
     description: Preview and confirm removal of a non-founding territory chunk
   autoclaim:

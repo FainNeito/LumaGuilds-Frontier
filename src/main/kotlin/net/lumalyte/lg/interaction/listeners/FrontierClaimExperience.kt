@@ -115,6 +115,14 @@ class FrontierClaimExperience(
     fun claimCommand(player: Player, arguments: String) {
         val text = arguments.trim()
         when (text.substringBefore(' ').lowercase()) {
+            "help" -> {
+                tell(player, "Use /claim to preview, /claimconfirm to claim, or /claim cancel to cancel.")
+                tell(player, "Use /claim outline for borders; /claim rename <name> names your whole territory.")
+                tell(player, "Use /autoclaim to preview automatic claiming; /unclaim for chunk removal.")
+                tell(player, "Expand around your Founding Vault. Picking it up requires confirmation and releases ALL claims.")
+                tell(player, "Claims are overworld-only. Use /raidinfo for raid times and /serverinfo for survival rules.")
+                return
+            }
             "confirm" -> { confirm(player); return }
             "cancel" -> { previews.remove(player.uniqueId); tell(player, "Preview cancelled."); return }
             "outline" -> { outlines[player.uniqueId] = clock().plusSeconds(30); tell(player, "Showing territory borders for 30 seconds."); return }
@@ -182,7 +190,11 @@ class FrontierClaimExperience(
         val position = Position3D(location.blockX,location.blockY,location.blockZ)
         if (!territory.canExtend(owner,location.world.uid,position.getChunk())) { tell(player,"Claim an edge-adjacent chunk connected back to your Founding Vault."); return }
         if (valid.execute(position,location.world.uid,player.uniqueId, if (owner.type == FrontierOwnerType.GUILD) setOf(owner.id) else emptySet()) != IsNewClaimLocationValidResult.Valid) {
-            tell(player,"This chunk overlaps land, its buffer, reserved spawn, or the world border."); return
+            val serverLand = config.frontier.serverTerritory
+            if (serverLand != null && location.world.name == config.frontier.worldName && serverLand.contains(location.blockX,location.blockZ))
+                tell(player,"${serverLand.name} is public server territory. You may build and fight here, but cannot claim it.")
+            else tell(player,"This chunk overlaps land, its buffer, reserved spawn, or the world border.")
+            return
         }
         previews[player.uniqueId] = Preview(location.clone(),clock().plusSeconds(30),territoryName,owner,foundation?.id)
         tell(player,"Preview: $territoryName — chunk ${position.getChunk().x}, ${position.getChunk().z}. ${if(foundation == null) "Your Founding Vault will be placed here." else "Expands your territory; no extra vault or bell is placed."}")

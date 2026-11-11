@@ -25,6 +25,8 @@ class FrontierObjectiveListener(
     private val config: net.lumalyte.lg.config.MainConfig = net.lumalyte.lg.config.MainConfig(),
     private val partitions: net.lumalyte.lg.application.persistence.PartitionRepository? = null,
 ) : Listener {
+    var raidNotifications: FrontierRaidNotifications? = null
+    var frontierWars: net.lumalyte.lg.infrastructure.services.FrontierWars? = null
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onBreak(event: BlockBreakEvent) {
         val block = event.block
@@ -53,19 +55,47 @@ class FrontierObjectiveListener(
                 FrontierSiegeResult.Defeated -> "Objective destroyed. Its owner's claims have fallen."
             }
             event.player.sendActionBar(FrontierTheme.message("Raid", message, true))
-            if (result is FrontierSiegeResult.Progress) FrontierTheme.cue(event.player, FrontierTheme.Cue.HIT)
+            if (result is FrontierSiegeResult.Progress) {
+                FrontierTheme.cue(event.player, FrontierTheme.Cue.HIT)
+                underAttack(owner, event.player.name)
+            }
             if (result == FrontierSiegeResult.Defeated) {
-                FrontierTheme.cue(event.player, FrontierTheme.Cue.SUCCESS)
-                plugin.server.onlinePlayers.filter {
-                    if (guild != null) members.getMember(it.uniqueId, guild.id) != null else it.uniqueId == claim!!.playerId
-                }.forEach {
-                    it.sendMessage(FrontierTheme.message("Claim fallen", "Your ${if (guild != null) "guild vault" else "solo anchor"} was destroyed. Your ${if (guild != null) "guild" else "personal"} claims have fallen.", true))
-                    FrontierTheme.cue(it, FrontierTheme.Cue.FALLEN)
-                }
+                fallen(owner, guild?.name ?: claim!!.name, event.player)
             }
         } catch (failure: Exception) {
             plugin.logger.log(Level.SEVERE, "Frontier objective operation failed for $owner", failure)
             event.player.sendMessage(FrontierTheme.message("Raid", "Objective cleanup is pending. Please contact staff.", true))
+        }
+    }
+
+    private fun defending(player: org.bukkit.entity.Player, owner: FrontierOwner): Boolean =
+        if (owner.type == FrontierOwnerType.GUILD) members.getMember(player.uniqueId, owner.id) != null
+        else player.uniqueId == owner.id
+
+    private fun underAttack(owner: FrontierOwner, attacker: String) {
+        raidNotifications?.notify(owner, "raid", "$attacker is damaging your Frontier Founding Vault.")
+        plugin.server.onlinePlayers.filter { defending(it, owner) }.forEach {
+            FrontierFeedback.show(it, "raid", "VAULT UNDER ATTACK", "$attacker is damaging your Founding Vault",
+                danger = true, important = true)
+        }
+    }
+
+    private fun fallen(owner: FrontierOwner, name: String, attacker: org.bukkit.entity.Player?) {
+        frontierWars?.vaultFallen(owner,attacker?.let { members.getPlayerGuilds(it.uniqueId) } ?: emptySet())
+        raidNotifications?.notify(owner, "defeat", "Your Frontier Founding Vault was destroyed. All territory claims have fallen.")
+        plugin.server.onlinePlayers.filter { defending(it, owner) }.forEach {
+            it.sendMessage(FrontierTheme.message("Defeat", "Your Founding Vault was destroyed. ALL territory claims have fallen.", true))
+            FrontierFeedback.show(it, "defeat", "DEFEAT", "Your vault has fallen · All claims lost",
+                danger = true, important = true)
+        }
+        // TNT without a player source still causes defeat, but never invents a winning guild.
+        if (attacker == null || defending(attacker, owner)) return
+        val attackingGuilds = members.getPlayerGuilds(attacker.uniqueId)
+        plugin.server.onlinePlayers.filter { !defending(it, owner) &&
+            (it.uniqueId == attacker.uniqueId || members.getPlayerGuilds(it.uniqueId).any(attackingGuilds::contains))
+        }.forEach {
+            it.sendMessage(FrontierTheme.message("Victory", "${attacker.name} destroyed $name's Founding Vault. Its territory is now unclaimed."))
+            FrontierFeedback.show(it, "victory", "VICTORY", "$name · Vault destroyed", important = true)
         }
     }
 
@@ -79,7 +109,8 @@ class FrontierObjectiveListener(
         return if (claim.teamId == null && objectives.primaryAnchor(claim)) FrontierOwner(FrontierOwnerType.PERSONAL,claim.playerId) else null
     }
 
-    private fun protect(blocks: MutableList<org.bukkit.block.Block>, tnt: Boolean = false, wither: Boolean = false) {
+    private fun protect(blocks: MutableList<org.bukkit.block.Block>, tnt: Boolean = false, wither: Boolean = false,
+                        attacker: org.bukkit.entity.Player? = null) {
         val now = Instant.now()
         val active = config.frontier.schedule.stateAt(now).active
         for (block in blocks.toList()) {
@@ -88,15 +119,11 @@ class FrontierObjectiveListener(
                 blocks.remove(block) // Never allow vanilla destruction to bypass durable claim loss.
                 if (tnt && active) {
                     try {
+                        val name = vaults.getGuildForVaultChest(block.location)?.name ?: claimAt(block)?.name ?: "Solo territory"
                         val result = objectives.siege.hit(owner,FrontierObjectives.key(block.location),false,now,
                             minOf(config.frontier.tntVaultDamage,config.frontier.requiredHits))
-                        plugin.server.onlinePlayers.filter { if (owner.type == FrontierOwnerType.GUILD) members.getMember(it.uniqueId,owner.id) != null else it.uniqueId == owner.id }.forEach {
-                            it.sendMessage(FrontierTheme.message("Vault under attack",when(result) {
-                                is FrontierSiegeResult.Progress -> "TNT hit your Founding Vault: ${result.hits}/${result.required} damage."
-                                FrontierSiegeResult.Defeated -> "Your Founding Vault was destroyed. ALL territory claims have fallen."
-                                else -> "TNT is striking your Founding Vault."
-                            },true))
-                        }
+                        if (result is FrontierSiegeResult.Progress) underAttack(owner, attacker?.name ?: "TNT")
+                        if (result == FrontierSiegeResult.Defeated) fallen(owner, name, attacker)
                     } catch (failure: Exception) { plugin.logger.log(Level.SEVERE,"TNT objective cleanup pending",failure) }
                 }
             } else if ((wither || !active) && claimAt(block) != null) blocks.remove(block)
@@ -108,7 +135,8 @@ class FrontierObjectiveListener(
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onEntityExplosion(event: EntityExplodeEvent) = protect(event.blockList(),event.entity is org.bukkit.entity.TNTPrimed,
-        event.entity is org.bukkit.entity.Wither || event.entity is org.bukkit.entity.WitherSkull)
+        event.entity is org.bukkit.entity.Wither || event.entity is org.bukkit.entity.WitherSkull,
+        (event.entity as? org.bukkit.entity.TNTPrimed)?.source as? org.bukkit.entity.Player)
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onWitherChange(event: org.bukkit.event.entity.EntityChangeBlockEvent) {

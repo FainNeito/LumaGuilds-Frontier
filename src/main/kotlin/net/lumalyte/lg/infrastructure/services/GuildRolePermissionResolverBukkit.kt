@@ -28,6 +28,7 @@ class GuildRolePermissionResolverBukkit(
     private val adminOverrideService: AdminOverrideService,
     private val rankClaimPermissionProfiles: RankClaimPermissionProfileRepository,
 ) : GuildRolePermissionResolver {
+    var frontierPermissionOverride: ((net.lumalyte.lg.domain.entities.Rank) -> Set<ClaimPermission>?)? = null
     
     private val logger = LoggerFactory.getLogger(GuildRolePermissionResolverBukkit::class.java)
     
@@ -66,6 +67,8 @@ class GuildRolePermissionResolverBukkit(
     }
     
     override fun getPermissions(playerId: UUID, claimId: UUID): Set<ClaimPermission> {
+        // Frontier revocation and demotion must take effect immediately, including an already-open menu.
+        if (configService.loadConfig().frontier.enabled) return computePermissions(playerId, claimId)
         val cacheKey = "${playerId}_${claimId}"
         
         // Check cache first
@@ -103,7 +106,7 @@ class GuildRolePermissionResolverBukkit(
             
             // Bind legacy name-based config to this stable rank ID once. Renaming
             // the display name must not change the permission profile identity.
-            return mapRankToClaimPermissions(rank)
+            return permissionsForRank(rank)
             
         } catch (e: Exception) {
             // Service operation - catching all exceptions to prevent service failure
@@ -113,6 +116,7 @@ class GuildRolePermissionResolverBukkit(
     }
     
     private fun isPlayerInGuild(playerId: UUID, guildId: UUID): Boolean {
+        if (configService.loadConfig().frontier.enabled) return memberService.getPlayerGuilds(playerId).contains(guildId)
         val cacheKey = "${playerId}_${guildId}"
         
         // Check cache first
@@ -126,8 +130,12 @@ class GuildRolePermissionResolverBukkit(
         return isMember
     }
     
-    private fun mapRankToClaimPermissions(rank: net.lumalyte.lg.domain.entities.Rank): Set<ClaimPermission> {
+    fun permissionsForRank(rank: net.lumalyte.lg.domain.entities.Rank): Set<ClaimPermission> {
         val config = configService.loadConfig()
+        if (config.frontier.enabled) {
+            if (rank.priority == 0) return ClaimPermission.entries.toSet()
+            frontierPermissionOverride?.invoke(rank)?.let { return it }
+        }
         val profileName = rankClaimPermissionProfiles.getOrCreate(rank.id, rank.name)
 
         // Legacy config remains keyed by a human-readable profile name, but the

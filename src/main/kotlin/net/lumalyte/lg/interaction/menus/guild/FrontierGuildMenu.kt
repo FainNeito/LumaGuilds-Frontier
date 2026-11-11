@@ -20,7 +20,30 @@ import org.koin.core.component.inject
 /** A vanilla inventory with no SMP dashboard links or resource-pack dependency. */
 object FrontierGuildMenu : KoinComponent {
     private val lang: LangService by inject()
+    private val guilds: net.lumalyte.lg.application.services.GuildService by inject()
     fun open(player: Player, config: MainConfig) {
+        val gui = ChestGui(3, lang.guiTitle("frontier_menu.title"))
+        val pane = StaticPane(0,0,9,3); gui.addPane(pane)
+        gui.setOnGlobalClick { it.isCancelled = true }; gui.setOnGlobalDrag { it.isCancelled = true }
+        fun button(x: Int,y: Int,material: Material,title: String,lore: List<String>,action: () -> Unit) {
+            val item = ItemStack(material)
+            item.editMeta { it.displayName(FrontierTheme.heading(title)); it.lore(lore.map { line -> Component.text(line,FrontierTheme.cream) }) }
+            pane.addItem(GuiItem(item) { player.closeInventory(); FrontierTheme.cue(player,FrontierTheme.Cue.CLICK); action() },x,y)
+        }
+        val guild = guilds.getPlayerGuilds(player.uniqueId).firstOrNull()
+        button(4,0,Material.WHITE_BANNER,guild?.name ?: "Frontier",listOf("Your guild · Your territory")) { player.performCommand("guild info") }
+        button(2,0,Material.BOOK,"Information & members",listOf("View your guild roster and information.")) { player.performCommand("guild info") }
+        button(6,0,Material.WRITABLE_BOOK,"Guild chat",listOf("Toggle your private guild channel.")) { player.performCommand("guild chat") }
+        button(2,1,Material.IRON_SWORD,"Ranks & permissions",listOf("Territory access, vault access and leadership.")) { FrontierRanksMenu.open(player) }
+        button(4,1,Material.MAP,"Territory",listOf("Claims, outlines, homes and expansion.")) { tools(player,config) }
+        button(6,1,Material.CHEST,"Founding Vault",listOf("Visit your vault for shared storage.","Its destruction releases your territory.")) { player.performCommand("guild getvault") }
+        button(0,2,Material.BOOK,"Survival guide",listOf("Claiming, travel and raid rules.")) { player.performCommand("serverinfo") }
+        button(3,2,Material.BOOK,"Diplomacy",listOf("Allies, enemies and requests.")) { FrontierDiplomacyMenu.open(player) }
+        button(5,2,Material.RED_BANNER,"Warfare",listOf("Declarations, vault objectives and war history.")) { FrontierWarMenu.open(player) }
+        button(8,2,Material.ANVIL,"Guild actions",listOf("Commands and guarded territory actions.")) { tools(player,config) }
+        gui.show(player)
+    }
+    private fun tools(player: Player, config: MainConfig) {
         val gui = ChestGui(5, lang.guiTitle("frontier_menu.title"))
         val pane = StaticPane(0, 0, 9, 5)
         gui.addPane(pane)

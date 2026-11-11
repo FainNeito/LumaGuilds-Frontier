@@ -19,10 +19,27 @@ import java.util.concurrent.ThreadLocalRandom
 
 /** Registered only on the isolated Frontier profile. Items are denied, not deleted. */
 class FrontierServerRules(private val config: FrontierConfig, private val openMenu: (Player) -> Unit = {}) : Listener {
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    fun onWitherSpawn(event: org.bukkit.event.entity.CreatureSpawnEvent) {
+        if (event.entity is org.bukkit.entity.Wither) event.isCancelled = true
+    }
+
+    fun removeWithers(entities: Collection<org.bukkit.entity.Entity>) {
+        entities.filterIsInstance<org.bukkit.entity.Wither>().forEach { it.remove() }
+    }
+
+    @EventHandler
+    fun onWithersLoaded(event: org.bukkit.event.world.EntitiesLoadEvent) {
+        removeWithers(event.entities)
+    }
+
     var homeAction: (Player, Boolean) -> Unit = { _, _ -> }
+    var ranksAction: (Player) -> Unit = {}
+    var rosterLocked: () -> Boolean = { false }
+    var warAction: (Player) -> Unit = {}
     companion object {
         val bannedItems = setOf(Material.END_CRYSTAL, Material.ELYTRA, Material.RESPAWN_ANCHOR, Material.MACE)
-        val guildCommands = setOf("warbanner", "home", "sethome", "menu", "help", "start", "gettingstarted", "create", "rename", "invite", "join", "accept", "decline", "invites",
+        val guildCommands = setOf("war", "ranks", "warbanner", "home", "sethome", "menu", "help", "start", "gettingstarted", "create", "rename", "invite", "join", "accept", "decline", "invites",
             "kick", "leave", "disband", "transfer", "tag", "description", "desc", "info", "getvault", "chat", "notify", "notifications")
     }
 
@@ -30,6 +47,21 @@ class FrontierServerRules(private val config: FrontierConfig, private val openMe
     fun onCommand(event: org.bukkit.event.player.PlayerCommandPreprocessEvent) {
         val words = event.message.removePrefix("/").lowercase(java.util.Locale.ROOT).split(Regex("\\s+"))
         val root = words.first().substringAfter(':')
+        if (root in setOf("g", "guild", "guilds") && words.getOrNull(1) in setOf("create", "join", "accept", "kick") && rosterLocked()) {
+            event.isCancelled = true
+            event.player.sendMessage(FrontierTheme.message("Guild", "Guild rosters are locked during raids. Joining and kicking resume after the raid window; you may still leave."))
+            return
+        }
+        if (root in setOf("g", "guild", "guilds") && words.getOrNull(1) == "war") {
+            event.isCancelled = true
+            warAction(event.player)
+            return
+        }
+        if (root in setOf("g", "guild", "guilds") && words.getOrNull(1) == "ranks") {
+            event.isCancelled = true
+            if (event.player.hasPermission("lumaguilds.guild.ranks")) ranksAction(event.player)
+            return
+        }
         if (root in setOf("g", "guild", "guilds") && words.getOrNull(1) in setOf("home", "sethome")) {
             event.isCancelled = true
             if (words.size != 2) event.player.sendMessage(FrontierTheme.message("Home", "Use /guild home or /guild sethome. One shared home is available."))

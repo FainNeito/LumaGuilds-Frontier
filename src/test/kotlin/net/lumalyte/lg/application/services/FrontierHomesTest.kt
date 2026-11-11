@@ -129,4 +129,36 @@ class FrontierHomesTest {
         player.teleport(destination); h.command(player,true,true); player.teleport(origin); h.command(player,true,false)
         member=false; advance(); h.tick(); assertEquals(origin,player.location)
     }
+
+    @Test fun `guild home survives reload with facing and remains a single slot`() = scenario {
+        claim=claim.copy(teamId=guild.id)
+        destination.yaw=90f; destination.pitch=15f
+        player.teleport(destination); homes().command(player,true,true)
+        player.teleport(origin)
+        val h=homes(); h.command(player,true,false); advance(); h.tick()
+        assertEquals(destination,player.location)
+        assertNull(h.loadLocation("PERSONAL.${player.uniqueId}.location"))
+    }
+
+    @Test fun `teleport cooldown blocks before thirty seconds and allows at the boundary`() = scenario {
+        val h=homes(); h.command(player,false,true); player.teleport(origin)
+        h.command(player,false,false); advance(); h.tick()
+        assertEquals(destination,player.location)
+        val completed=now
+        player.teleport(origin); now=completed.plusSeconds(29)
+        h.command(player,false,false); now=completed.plusSeconds(30); h.tick()
+        assertEquals(origin,player.location)
+        h.command(player,false,false); advance(); h.tick()
+        assertEquals(destination,player.location)
+    }
+
+    @Test fun `failed home save preserves previous home in memory and after reload`() = scenario {
+        val h=homes(); h.command(player,false,true)
+        // A directory at the temporary-file path reliably rejects the write on all platforms.
+        assertTrue(plugin.dataFolder.resolve("frontier-homes.yml.tmp").mkdir())
+        player.teleport(origin); h.command(player,false,true)
+        val path="PERSONAL.${player.uniqueId}.location"
+        assertEquals(destination,h.loadLocation(path))
+        assertEquals(destination,homes().loadLocation(path))
+    }
 }

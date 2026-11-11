@@ -312,4 +312,18 @@ class GuildRolePermissionResolverBukkitTest {
         verify(exactly = 1) { adminOverrideService.hasOverride(testPlayerId) }
         verify(exactly = 0) { rankService.getPlayerRank(any(), any()) }
     }
+
+    @Test fun `Frontier empty override denies access and departed member loses it immediately`() {
+        val frontierConfig = configService.loadConfig().copy(frontier = net.lumalyte.lg.config.FrontierConfig(enabled = true))
+        every { configService.loadConfig() } returns frontierConfig
+        val rank = Rank(UUID.randomUUID(), testGuildId, "member", 2)
+        every { memberService.getPlayerGuilds(testPlayerId) } returns setOf(testGuildId)
+        every { rankService.getPlayerRank(testPlayerId, testGuildId) } returns rank
+        resolver.frontierPermissionOverride = { emptySet() }
+        assertTrue(resolver.getPermissions(testPlayerId,testClaimId).isEmpty())
+        resolver.frontierPermissionOverride = { setOf(ClaimPermission.BUILD) }
+        assertTrue(resolver.hasPermission(testPlayerId,testClaimId,ClaimPermission.BUILD))
+        every { memberService.getPlayerGuilds(testPlayerId) } returns emptySet()
+        assertFalse(resolver.hasPermission(testPlayerId,testClaimId,ClaimPermission.BUILD))
+    }
 }

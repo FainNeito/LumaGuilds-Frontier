@@ -114,6 +114,10 @@ class WarBannerListener(
                 if (frontier.enabled) {
                     broadcast(net.lumalyte.lg.interaction.listeners.FrontierTheme.message("War banner",
                         "${guild.name} has placed a war banner! Rally available for up to 15 minutes, until the raid window closes.", true))
+                    org.bukkit.Bukkit.getOnlinePlayers().forEach {
+                        net.lumalyte.lg.interaction.listeners.FrontierFeedback.show(it, "banner",
+                            "WAR BANNER RAISED", guild.name, danger = true, important = true)
+                    }
                 } else {
                     player.sendMessage(lang.msg("war_banner.feedback.placed", "cost" to result.cost))
                     broadcast(lang.msg("war_banner.broadcast.placed", "guild" to guild.name))

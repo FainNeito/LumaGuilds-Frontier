@@ -33,7 +33,7 @@ class IsPlayerActionAllowed(private val playerAccessRepository: PlayerAccessRepo
 
         // Always allow if player owns the claim or has override
         val playerState = playerStateRepository.get(playerId)
-        if (playerId == claim.playerId || (playerState != null && playerState.claimOverride))
+        if ((playerId == claim.playerId && (!config.frontier.enabled || claim.teamId == null)) || (playerState != null && playerState.claimOverride))
             return IsPlayerActionAllowedResult.Allowed(claim)
 
         // Get the flag associated with the action
@@ -44,6 +44,8 @@ class IsPlayerActionAllowed(private val playerAccessRepository: PlayerAccessRepo
         if (guildRolePermissionResolver.hasPermission(playerId, claim.id, relevantPermission)) {
             return IsPlayerActionAllowedResult.Allowed(claim)
         }
+        // Frontier guild land uses current ranks, not legacy grants left on individual chunks.
+        if (config.frontier.enabled && claim.teamId != null) return IsPlayerActionAllowedResult.Denied(claim)
         
         // Fallback to individual and claim-wide permissions
         if (playerAccessRepository.doesPlayerHavePermission(playerId, claim.id, relevantPermission)

@@ -64,6 +64,15 @@ claims_enabled: true
 # This enables geometry only; the Frontier raid/vault rules are still under development.
 claim_geometry: BLOCKS
 frontier:
+  # Public server land in frontier.world.name. Inclusive chunk bounds; restart after edits.
+  # Reserves land only: building, containers, PvP and TNT remain available.
+  server_territory:
+    enabled: true
+    name: "Watcher's Ruin"
+    min_chunk_x: -8
+    max_chunk_x: 7
+    min_chunk_z: -8
+    max_chunk_z: 7
   # Development mode: use only on a fresh isolated server. Restart after changes.
   # Isolated testing profile; do not enable against an existing SMP database.
   claims:

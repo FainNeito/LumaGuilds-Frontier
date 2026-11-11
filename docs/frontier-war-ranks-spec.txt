@@ -1,0 +1,13 @@
+Frontier warfare and ranks - SPEAR record (2026-11-11)
+
+FR-01: Persist per-guild-rank claim permissions keyed by rank UUID. Empty means deny all, not defaults. Failed writes retain prior access. Rank renames preserve settings.
+FR-02: Only a current higher-ranking member with rank/permission management may change lower ranks; owner rank is protected. Officers cannot grant permissions they lack. Recheck authority at every click.
+FR-03: Guild claim creators do not retain a personal-owner bypass. Current rank governs ordinary access; the scheduled raid vulnerability remains unchanged. Membership changes must not leave cached access.
+FR-04: Use the FainNeito/LumaGuilds GuildDashboard three-row structure: identity, management, diplomacy/warfare; destructive operations stay in a separate submenu. No quests, currency, or progression.
+FR-05: Restore allies/enemies through a Frontier-specific diplomacy screen, with mutual alliances and no automatic claim/vault access. Add configurable alliance limit.
+FR-06: Vault-focused wars run inside the daily raid window, with advance declaration, one active war per guild, durable outcomes, surrender/peace and history. Ordinary raids do not require a war. No wagers or progression gates.
+
+Source review: FainNeito/LumaGuilds main GuildDashboard.kt, RankServiceBukkit.kt, GuildRolePermissionResolverBukkit.kt, RelationService.kt, WarServiceBukkit.kt, WarKillTrackingListener.kt.
+Implementation order: rank persistence/authorization and access enforcement; dashboard/submenus; diplomacy; dedicated war lifecycle and vault event integration.
+Existing SMP war acceptance and XP-only anti-farming are not Frontier's final war rules. Do not expose that workflow as completed Frontier warfare.
+Evidence: failing compile tests captured in frontier-ranks-red.log and frontier-war-red.log before implementation; targeted suite {'tests': 134, 'failures': 0, 'errors': 0, 'skipped': 0}; shadowJar test.19 passed; snapshot 8 lab startup/commands/shutdown passed with zero ERROR/SEVERE. Logs: frontier-26.4-snapshot8/evidence/frontier-ranks-green.log and frontier-war-ranks-lab.log. Player gameplay/menu visual testing deferred by user. Deployment: Bloom Frontier 942c6700 updated to test.19, version verified and all 20 plugins listed; startup log has no ERROR/SEVERE. SMP untouched. Rollback: frontier-26.4-snapshot8/living-world/rollback-war-ranks.zip. SHA256: 2b38800b3ae68b2b6a70caad1c4766ef4f6d9fde7e65f9dcd53f5085d863286b. Evidence: frontier-war-ranks-bloom.log/png.
