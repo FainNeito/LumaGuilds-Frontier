@@ -69,6 +69,10 @@ class FrontierRaidClaims(
     @Synchronized fun forGuild(attacker: UUID, now: Long): FrontierRaidClaim? =
         active[attacker]?.takeIf { live(it, now) }
 
+    /** Integration point for the selective raid lock Fain owns: target guilds only. */
+    @Synchronized fun isBeingRaided(defender: UUID, now: Long): Boolean =
+        active.values.any { it.defender == defender && live(it, now) }
+
     @Synchronized fun reconcile(now: Long) {
         active.values.filterNot { live(it, now) }.forEach { record ->
             store.delete(record.attacker)

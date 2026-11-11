@@ -90,9 +90,12 @@ class FrontierRaidClaimsTest {
         val raids = service()
         assertEquals(FrontierRaidClaimCheck.Allowed(defender), raids.create(attacker, chunk, null, now))
         assertNotNull(raids.at(chunk, now))
+        assertTrue(raids.isBeingRaided(defender, now))
+        assertFalse(raids.isBeingRaided(attacker, now))
         assertIs<FrontierRaidClaimCheck.Rejected>(raids.create(attacker, chunk, null, now + 1_000))
         raids.reconcile(now + 120_000)
         assertNull(raids.at(chunk, now + 120_000))
+        assertFalse(raids.isBeingRaided(defender, now + 120_000))
         assertTrue(stored.isEmpty())
     }
 
