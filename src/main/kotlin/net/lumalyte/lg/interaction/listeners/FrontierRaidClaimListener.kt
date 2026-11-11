@@ -96,7 +96,12 @@ class FrontierRaidClaimListener(
             }
             "abandon" -> {
                 val guildId = guild(player) ?: return
-                if (raids.abandon(guildId, clock())) tell(player, "Unbannered raid claim abandoned.")
+                val removed = runCatching { raids.abandon(guildId, clock()) }.getOrElse {
+                    plugin.logger.log(java.util.logging.Level.SEVERE, "Raid claim abandon failed", it)
+                    tell(player, "Raid claim storage is unavailable. Please retry.", true)
+                    return
+                }
+                if (removed) tell(player, "Unbannered raid claim abandoned.")
                 else tell(player, "Only an unbannered staging claim can be abandoned. Defenders must destroy an active banner.", true)
                 return
             }
@@ -125,7 +130,12 @@ class FrontierRaidClaimListener(
             FrontierChunk(player.world.uid, player.chunk.x, player.chunk.z) != preview.chunk) {
             tell(player, "Your location or guild permissions changed. Preview again.", true); return
         }
-        when (val result = raids.create(preview.guildId, preview.chunk, preview.target, clock())) {
+        val result = runCatching { raids.create(preview.guildId, preview.chunk, preview.target, clock()) }.getOrElse {
+            plugin.logger.log(java.util.logging.Level.SEVERE, "Raid claim creation failed", it)
+            tell(player, "Raid claim storage is unavailable. Check /raidclaim status before retrying.", true)
+            return
+        }
+        when (result) {
             is FrontierRaidClaimCheck.Rejected -> tell(player, result.reason, true)
             is FrontierRaidClaimCheck.Allowed -> {
                 val attacker = guilds.getGuild(preview.guildId)?.name ?: "An attacking guild"

@@ -119,7 +119,9 @@ class WarBannerListener(
             now = clock(),
         ) { state ->
             if (!bukkit.renderPlaced(block, guild, state)) false
-            else if (!frontier.enabled || raidClaims?.bind(state, clock()) == true) true
+            else if (!frontier.enabled || runCatching { raidClaims?.bind(state, clock()) == true }
+                    .onFailure { Bukkit.getLogger().log(java.util.logging.Level.SEVERE, "Raid banner binding failed", it) }
+                    .getOrDefault(false)) true
             else {
                 bukkit.removePhysical(state)
                 false
