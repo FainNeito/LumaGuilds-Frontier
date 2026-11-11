@@ -16,6 +16,7 @@ import net.lumalyte.lg.domain.values.Area
 import net.lumalyte.lg.domain.values.FrontierChunk
 import net.lumalyte.lg.domain.values.Position2D
 import org.bukkit.Bukkit
+import org.bukkit.ChatColor
 import org.bukkit.Location
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
@@ -157,7 +158,7 @@ class FrontierTerritoryScoreboard(
         objective.numberFormat(NumberFormat.blank())
         objective.displaySlot = DisplaySlot.SIDEBAR
         val lines = (0 until 14).map { index ->
-            val entry = "§${index.toString(16)}"
+            val entry = "${ChatColor.COLOR_CHAR}${index.toString(16)}"
             board.registerNewTeam("frontier_$index").also { team ->
                 team.addEntry(entry)
                 board.getObjective("frontier_map")!!.getScore(entry).score = 14 - index
