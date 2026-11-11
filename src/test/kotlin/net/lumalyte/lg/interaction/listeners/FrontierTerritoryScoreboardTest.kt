@@ -78,17 +78,6 @@ class FrontierTerritoryScoreboardTest {
     }
 
     @Test
-    fun `solo barrel icon only appears at primary anchor chunk`() {
-        val barrel = Claim(world, player, null, Position3D(-1, 64, -16), "Solo")
-        val chunk = FrontierChunk(world, -1, -1)
-        assertTrue(FrontierMapVaults.soloAt(barrel, true, chunk))
-        assertFalse(FrontierMapVaults.soloAt(barrel, false, chunk))
-        assertFalse(FrontierMapVaults.soloAt(barrel, true, chunk.copy(x = 0)))
-        assertFalse(FrontierMapVaults.soloAt(barrel, true, chunk.copy(worldId = UUID.randomUUID())))
-        assertFalse(FrontierMapVaults.soloAt(barrel.copy(teamId = guild), true, chunk))
-    }
-
-    @Test
     fun `war banner icon replaces only a bound raid square without changing its color`() {
         val staging = FrontierRaidClaim(guild, enemy, FrontierChunk(world, 0, 0),
             createdAt = 1L, windowEnd = 10_000L, graceEnd = 120L)

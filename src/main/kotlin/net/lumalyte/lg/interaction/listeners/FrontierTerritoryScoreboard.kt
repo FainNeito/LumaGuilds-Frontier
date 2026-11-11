@@ -18,7 +18,6 @@ import net.lumalyte.lg.domain.entities.VaultStatus
 import net.lumalyte.lg.domain.values.Area
 import net.lumalyte.lg.domain.values.FrontierChunk
 import net.lumalyte.lg.domain.values.Position2D
-import net.lumalyte.lg.infrastructure.services.FrontierObjectives
 import org.bukkit.Bukkit
 import org.bukkit.ChatColor
 import org.bukkit.Location
@@ -83,10 +82,6 @@ internal object FrontierMapVaults {
         return vault.worldId == chunk.worldId && Math.floorDiv(vault.x, 16) == chunk.x &&
             Math.floorDiv(vault.z, 16) == chunk.z
     }
-
-    fun soloAt(claim: Claim, primary: Boolean, chunk: FrontierChunk): Boolean =
-        claim.teamId == null && primary && claim.worldId == chunk.worldId &&
-            Math.floorDiv(claim.position.x, 16) == chunk.x && Math.floorDiv(claim.position.z, 16) == chunk.z
 }
 
 internal object FrontierMapOwnership {
@@ -115,7 +110,6 @@ class FrontierTerritoryScoreboard(
     private val guilds: GuildService,
     private val relations: RelationService,
     private val raidClaims: FrontierRaidClaims,
-    private val objectives: FrontierObjectives,
 ) : Listener {
     private data class Display(
         val previous: Scoreboard,
@@ -212,7 +206,6 @@ class FrontierTerritoryScoreboard(
         val ownGuilds = guilds.getPlayerGuilds(player.uniqueId).mapTo(mutableSetOf()) { it.id }
         val claimCache = mutableMapOf<UUID, Claim?>()
         val guildCache = mutableMapOf<UUID, Guild?>()
-        val primarySoloCache = mutableMapOf<UUID, Boolean>()
         val allied = mutableMapOf<UUID, Boolean>()
         val now = System.currentTimeMillis()
 
@@ -230,8 +223,7 @@ class FrontierTerritoryScoreboard(
                 val vault = permanent.any { claim ->
                     claim.teamId?.let { owner ->
                         FrontierMapVaults.guildAt(guildCache.getOrPut(owner) { guilds.getGuild(owner) }, chunk)
-                    } ?: FrontierMapVaults.soloAt(claim,
-                        primarySoloCache.getOrPut(claim.id) { objectives.primaryAnchor(claim) }, chunk)
+                    } == true
                 }
                 return MapCell.claimed(ownership, vault)
             }
