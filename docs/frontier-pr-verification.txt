@@ -1,0 +1,4 @@
+2026-11-11: accumulated Frontier PR verification
+Base main 6c28d2af; implementation 7bdc6cf3.
+Full Gradle test + shadowJar --offline: {'tests': 2626, 'failures': 0, 'errors': 0, 'skipped': 106}, BUILD SUCCESSFUL in 2m37s. Optional external profiles skipped; no live gameplay verification. Previously 143 focused tests and snapshot8 test.22 lab startup passed.
+Review of BadgersMC PR #1 at c6a96374: remote build PASS, draft. Non-mutating merge-tree detects startup conflict in LumaGuilds.kt. Four-chunk buffer defaults and stated future solo removal/selective locks differ from current session rules. Keep contributions separate. No merge or deployment performed.
