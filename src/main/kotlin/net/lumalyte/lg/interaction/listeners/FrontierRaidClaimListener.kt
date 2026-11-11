@@ -3,8 +3,11 @@ package net.lumalyte.lg.interaction.listeners
 import net.kyori.adventure.text.event.ClickEvent
 import net.lumalyte.lg.application.services.FrontierRaidClaimCheck
 import net.lumalyte.lg.application.services.FrontierRaidClaims
+import net.lumalyte.lg.application.services.FrontierSpawnerPlacement
 import net.lumalyte.lg.application.services.GuildService
 import net.lumalyte.lg.application.services.MemberService
+import net.lumalyte.lg.application.persistence.ClaimRepository
+import net.lumalyte.lg.application.persistence.PartitionRepository
 import net.lumalyte.lg.config.FrontierConfig
 import net.lumalyte.lg.domain.entities.RankPermission
 import net.lumalyte.lg.domain.entities.VaultStatus
@@ -33,8 +36,11 @@ class FrontierRaidClaimListener(
     private val guilds: GuildService,
     private val members: MemberService,
     private val cleanup: FrontierRaidBannerCleanup,
+    claims: ClaimRepository,
+    partitions: PartitionRepository,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : Listener {
+    private val spawnerPlacement = FrontierSpawnerPlacement(claims, partitions) { chunk, now -> raids.at(chunk, now) != null }
     private data class Preview(val guildId: UUID, val target: UUID, val chunk: FrontierChunk, val expires: Long)
     private val previews = mutableMapOf<UUID, Preview>()
 
@@ -150,16 +156,25 @@ class FrontierRaidClaimListener(
         }
     }
 
-    /** Temporary claims cannot become permanent storage/farm infrastructure. */
+    /** Spawners require permanent land owned by a player's guild; raid land never qualifies. */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onPlace(event: BlockPlaceEvent) {
         val chunk = FrontierChunk(event.block.world.uid, event.block.chunk.x, event.block.chunk.z)
+        if (event.block.type == Material.SPAWNER || event.block.type == Material.TRIAL_SPAWNER) {
+            val playerGuilds = guilds.getPlayerGuilds(event.player.uniqueId).mapTo(mutableSetOf()) { it.id }
+            if (event.block.world.name != config.worldName ||
+                event.block.world.environment != World.Environment.NORMAL ||
+                !spawnerPlacement.allowed(chunk, playerGuilds, clock())) {
+                event.isCancelled = true
+                tell(event.player, "Spawners can only be placed inside permanent territory owned by your guild. Wilderness and raid claims do not count.", true)
+            }
+            return
+        }
         if (raids.at(chunk, clock()) == null) return
         val meta = event.itemInHand.itemMeta
-        if (event.block.type == Material.SPAWNER ||
-            meta?.persistentDataContainer?.has(PluginKeys.GUILD_VAULT_ID, PersistentDataType.STRING) == true) {
+        if (meta?.persistentDataContainer?.has(PluginKeys.GUILD_VAULT_ID, PersistentDataType.STRING) == true) {
             event.isCancelled = true
-            tell(event.player, "Spawners and Founding Vaults cannot be placed in temporary raid claims.", true)
+            tell(event.player, "Founding Vaults cannot be placed in temporary raid claims.", true)
         }
     }
 }

@@ -1,5 +1,11 @@
 # Frontier isolated test server
 
+## Permanent guild territory required for spawner placement
+
+- In Frontier, regular and trial spawners can be placed **only inside permanent territory owned by one of the placing player's guilds**. Wilderness, other guilds' land (including allied land), remaining legacy personal land, and active temporary `/raidclaim` chunks are not eligible. Spawners are denied in other dimensions; Frontier guild claims are overworld-only.
+- The `BlockPlaceEvent` rule checks the current permanent partition and world-qualified claim owner, not the item's origin or the raid-claim's temporary owner. Unknown and overlapping/mixed ownership fails closed. The pre-existing guild claim build permissions still apply.
+- Acceptance: place a spawner in your own guild claim; try it in wilderness, an allied/enemy claim, an unbannered/bound raid claim, and outside the Frontier Overworld. Try both `SPAWNER` and `TRIAL_SPAWNER`, including at negative chunk coordinates. Ensure denied items are not consumed. This is a pending in-game test, not a production deployment.
+
 ## Sidebar territory map (pending isolated acceptance)
 
 - Frontier displays an **11×11 chunk map** in the otherwise unused sidebar, centered on the player's current chunk (gold diamond), with north at the top. Vanilla-font colorized square glyphs stand in for colored-square emojis, which Minecraft does not reliably render. Green = own guild/personal land, blue = allied guild, red = other territory, yellow = active forward raid claim, light gray = wilderness, dark gray = unclaimable border or spawn reservation.

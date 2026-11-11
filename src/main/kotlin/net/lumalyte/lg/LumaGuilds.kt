@@ -980,7 +980,8 @@ class LumaGuilds : JavaPlugin() {
             )
             val raidClaimListener = net.lumalyte.lg.interaction.listeners.FrontierRaidClaimListener(
                 this, frontierConfig, raidClaims, get().get(), get().get(),
-                net.lumalyte.lg.infrastructure.services.FrontierRaidBannerCleanup(get().get()))
+                net.lumalyte.lg.infrastructure.services.FrontierRaidBannerCleanup(get().get()),
+                get().get(), get().get())
             server.pluginManager.registerEvents(raidClaimListener, this)
             raidClaimListener.start()
             get().get<net.lumalyte.lg.infrastructure.listeners.WarBannerListener>().raidClaims = raidClaims
