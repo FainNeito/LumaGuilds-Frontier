@@ -7,6 +7,7 @@ import net.lumalyte.lg.domain.entities.WarBannerState
 import net.lumalyte.lg.domain.values.Area
 import net.lumalyte.lg.domain.values.FrontierChunk
 import net.lumalyte.lg.domain.values.Position2D
+import net.lumalyte.lg.domain.values.Position3D
 import java.time.Instant
 import java.util.UUID
 
@@ -20,6 +21,7 @@ data class FrontierRaidClaim(
     val graceEnd: Long,
     val bannerId: UUID? = null,
     val bannerEnd: Long? = null,
+    val bannerPosition: Position3D? = null,
 )
 
 interface FrontierRaidClaimStore {
@@ -73,8 +75,10 @@ class FrontierRaidClaims(
     @Synchronized fun isBeingRaided(defender: UUID, now: Long): Boolean =
         active.values.any { it.defender == defender && live(it, now) }
 
-    @Synchronized fun reconcile(now: Long) {
+    /** Do not erase an expired banner record until its physical block has been cleaned up. */
+    @Synchronized fun reconcile(now: Long, removeBanner: (FrontierRaidClaim) -> Boolean) {
         active.values.filterNot { live(it, now) }.forEach { record ->
+            if (record.bannerId != null && !removeBanner(record)) return@forEach
             store.delete(record.attacker)
             active.remove(record.attacker)
         }
@@ -86,6 +90,8 @@ class FrontierRaidClaims(
             return FrontierRaidClaimCheck.Rejected("Raid claims are available only during the raid hour.")
         if (active[attacker]?.let { live(it, now) } == true)
             return FrontierRaidClaimCheck.Rejected("Your guild already has an active raid claim.")
+        if (active[attacker]?.bannerId != null)
+            return FrontierRaidClaimCheck.Rejected("Your previous raid banner is still being cleaned up. Try again shortly.")
         if (active.values.any { it.chunk == chunk && live(it, now) })
             return FrontierRaidClaimCheck.Rejected("Another guild is already staging in this chunk.")
         val lastBanner = banner(attacker)
@@ -118,7 +124,7 @@ class FrontierRaidClaims(
     }
 
     @Synchronized fun create(attacker: UUID, chunk: FrontierChunk, target: UUID?, now: Long): FrontierRaidClaimCheck {
-        reconcile(now)
+        reconcile(now) { false } // Removes expired unbannered previews only; physical cleanup runs in the listener.
         val result = check(attacker, chunk, target, now)
         if (result !is FrontierRaidClaimCheck.Allowed) return result
         val end = config.schedule.stateAt(Instant.ofEpochMilli(now)).nextTransition.toEpochMilli()
@@ -134,7 +140,8 @@ class FrontierRaidClaims(
         if (record.bannerId != null || !live(record, now) || !state.isActiveAt(now) ||
             state.worldId != record.chunk.worldId || Math.floorDiv(state.x, 16) != record.chunk.x ||
             Math.floorDiv(state.z, 16) != record.chunk.z || state.expiresAt > record.windowEnd) return false
-        val bound = record.copy(bannerId = state.bannerId, bannerEnd = state.expiresAt)
+        val bound = record.copy(bannerId = state.bannerId, bannerEnd = state.expiresAt,
+            bannerPosition = Position3D(state.x, state.y, state.z))
         store.save(bound)
         active[state.guildId] = bound
         return true
@@ -149,7 +156,7 @@ class FrontierRaidClaims(
 
     @Synchronized fun abandon(attacker: UUID, now: Long): Boolean {
         val record = active[attacker] ?: return false
-        if (record.bannerId != null && live(record, now)) return false
+        if (record.bannerId != null) return false // Expired banners still require physical cleanup.
         store.delete(attacker)
         active.remove(attacker)
         return true

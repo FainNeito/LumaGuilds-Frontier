@@ -71,7 +71,7 @@ frontier:
     reserved_spawn_radius: 0
     entry_titles: true
     # Empty chunks required between unrelated claim owners.
-    buffer_chunks: 1
+    buffer_chunks: 4
   enabled: false
   raid:
     timezone: UTC

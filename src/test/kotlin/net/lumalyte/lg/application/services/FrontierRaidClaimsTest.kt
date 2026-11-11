@@ -93,7 +93,7 @@ class FrontierRaidClaimsTest {
         assertTrue(raids.isBeingRaided(defender, now))
         assertFalse(raids.isBeingRaided(attacker, now))
         assertIs<FrontierRaidClaimCheck.Rejected>(raids.create(attacker, chunk, null, now + 1_000))
-        raids.reconcile(now + 120_000)
+        raids.reconcile(now + 120_000) { true }
         assertNull(raids.at(chunk, now + 120_000))
         assertFalse(raids.isBeingRaided(defender, now + 120_000))
         assertTrue(stored.isEmpty())
@@ -126,9 +126,34 @@ class FrontierRaidClaimsTest {
             now + 86_400_000, true)
         assertTrue(raids.bind(requireNotNull(state), now + 1_000))
         state = null // Core no longer considers the banner active after restart/destruction.
-        raids.reconcile(now + 2_000)
+        raids.reconcile(now + 2_000) { record ->
+            assertNotNull(record.bannerPosition)
+            true // Simulates successful removal of the persisted physical banner.
+        }
         assertTrue(stored.isEmpty())
         assertNull(raids.forGuild(attacker, now + 2_000))
+    }
+
+    @Test fun `raid hour end unclaims immediately but retains banner cleanup until it succeeds`() {
+        territory(Position2D(0, 0))
+        val raids = service()
+        val nearEnd = Instant.parse("2026-11-10T20:59:00Z").toEpochMilli()
+        val end = Instant.parse("2026-11-10T21:00:00Z").toEpochMilli()
+        raids.create(attacker, chunk, null, nearEnd)
+        state = WarBannerState(attacker, UUID.randomUUID(), world, 17, 70, 2,
+            UUID.randomUUID(), UUID.randomUUID(), nearEnd + 1_000, end,
+            nearEnd + 86_400_000, true)
+        assertTrue(raids.bind(requireNotNull(state), nearEnd + 1_000))
+        var calls = 0
+        raids.reconcile(end) { calls++; false } // World not loaded or block removal failed.
+        assertEquals(1, calls)
+        assertNull(raids.at(chunk, end))
+        assertFalse(raids.isBeingRaided(defender, end))
+        assertNotNull(stored[attacker], "Keep the cleanup journal until the banner is gone")
+        assertIs<FrontierRaidClaimCheck.Rejected>(raids.check(attacker, chunk, null,
+            Instant.parse("2026-11-11T20:10:00Z").toEpochMilli()))
+        raids.reconcile(end + 1_000) { true }
+        assertTrue(stored.isEmpty())
     }
 
     @Test fun `file records survive restart and can be removed atomically`(@TempDir directory: Path) {
@@ -136,8 +161,10 @@ class FrontierRaidClaimsTest {
         val record = FrontierRaidClaim(attacker, defender, chunk, now, now + 3_000_000, now + 120_000)
         files.save(record)
         assertEquals(listOf(record), FrontierRaidClaimStoreFiles(directory).all())
-        files.save(record.copy(bannerId = UUID.randomUUID(), bannerEnd = now + 901_000))
-        assertNotNull(FrontierRaidClaimStoreFiles(directory).all().single().bannerId)
+        val bound = record.copy(bannerId = UUID.randomUUID(), bannerEnd = now + 901_000,
+            bannerPosition = Position3D(17, 70, 2))
+        files.save(bound)
+        assertEquals(listOf(bound), FrontierRaidClaimStoreFiles(directory).all())
         files.delete(attacker)
         assertTrue(files.all().isEmpty())
     }

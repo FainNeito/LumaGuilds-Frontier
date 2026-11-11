@@ -10,6 +10,7 @@ import net.lumalyte.lg.domain.entities.RankPermission
 import net.lumalyte.lg.domain.entities.VaultStatus
 import net.lumalyte.lg.domain.values.FrontierChunk
 import net.lumalyte.lg.common.PluginKeys
+import net.lumalyte.lg.infrastructure.services.FrontierRaidBannerCleanup
 import org.bukkit.Bukkit
 import org.bukkit.Color
 import org.bukkit.Material
@@ -31,6 +32,7 @@ class FrontierRaidClaimListener(
     private val raids: FrontierRaidClaims,
     private val guilds: GuildService,
     private val members: MemberService,
+    private val cleanup: FrontierRaidBannerCleanup,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : Listener {
     private data class Preview(val guildId: UUID, val target: UUID, val chunk: FrontierChunk, val expires: Long)
@@ -48,7 +50,7 @@ class FrontierRaidClaimListener(
         plugin.server.scheduler.runTaskTimer(plugin, Runnable {
             val now = clock()
             previews.entries.removeIf { now >= it.value.expires }
-            try { raids.reconcile(now) }
+            try { raids.reconcile(now, cleanup::remove) }
             catch (failure: Exception) { plugin.logger.log(java.util.logging.Level.SEVERE, "Raid claim cleanup failed; retrying", failure) }
         }, 20L, 100L)
     }

@@ -40,7 +40,7 @@ class ConfigServiceBukkit(private val configProvider: () -> FileConfiguration): 
             raidMiningSpeed = config.getDouble("frontier.siege.raid_mining_speed", 0.35),
             tntVaultDamage = config.getInt("frontier.siege.tnt_vault_damage", 4),
             claimTitles = config.getBoolean("frontier.claims.entry_titles", true),
-            foreignClaimBufferChunks = config.getInt("frontier.claims.buffer_chunks", 1),
+            foreignClaimBufferChunks = config.getInt("frontier.claims.buffer_chunks", 4),
             endBorderSize = config.getInt("frontier.world.end_border_size", 512),
         )
     }

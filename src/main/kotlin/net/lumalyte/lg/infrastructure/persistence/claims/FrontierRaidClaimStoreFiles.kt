@@ -3,6 +3,7 @@ package net.lumalyte.lg.infrastructure.persistence.claims
 import net.lumalyte.lg.application.services.FrontierRaidClaim
 import net.lumalyte.lg.application.services.FrontierRaidClaimStore
 import net.lumalyte.lg.domain.values.FrontierChunk
+import net.lumalyte.lg.domain.values.Position3D
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
@@ -38,6 +39,11 @@ class FrontierRaidClaimStoreFiles(private val directory: Path) : FrontierRaidCla
             setProperty("graceEnd", claim.graceEnd.toString())
             claim.bannerId?.let { setProperty("banner", it.toString()) }
             claim.bannerEnd?.let { setProperty("bannerEnd", it.toString()) }
+            claim.bannerPosition?.let {
+                setProperty("bannerX", it.x.toString())
+                setProperty("bannerY", it.y.toString())
+                setProperty("bannerZ", it.z.toString())
+            }
         }
         val bytes = ByteArrayOutputStream().use { output -> properties.store(output, "Frontier raid claim"); output.toByteArray() }
         val temp = Files.createTempFile(directory, "raidclaim-", ".tmp")
@@ -63,12 +69,16 @@ class FrontierRaidClaimStoreFiles(private val directory: Path) : FrontierRaidCla
         val banner = props.getProperty("banner")?.let(UUID::fromString)
         val end = props.getProperty("bannerEnd")?.toLong()
         require((banner == null) == (end == null)) { "Partially bound raid banner $file" }
+        val coords = listOf("bannerX", "bannerY", "bannerZ").map { props.getProperty(it) }
+        require(coords.all { it == null } || coords.all { it != null }) { "Incomplete banner coordinates $file" }
+        val position = if (coords.all { it != null }) Position3D(coords[0]!!.toInt(), coords[1]!!.toInt(), coords[2]!!.toInt()) else null
+        require(position == null || banner != null) { "Unbound raid claim has banner coordinates $file" }
         val created = props.getProperty("created").toLong()
         val windowEnd = props.getProperty("windowEnd").toLong()
         val graceEnd = props.getProperty("graceEnd").toLong()
         require(created < graceEnd && graceEnd <= windowEnd && (end == null || end <= windowEnd))
         return FrontierRaidClaim(attacker, UUID.fromString(props.getProperty("defender")),
             FrontierChunk(UUID.fromString(props.getProperty("world")), props.getProperty("x").toInt(), props.getProperty("z").toInt()),
-            created, windowEnd, graceEnd, banner, end)
+            created, windowEnd, graceEnd, banner, end, position)
     }
 }
