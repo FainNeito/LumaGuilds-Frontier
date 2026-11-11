@@ -74,7 +74,7 @@ class GuildServiceBukkit(
     }
 
     override fun createGuild(name: String, ownerId: UUID, banner: String?): Guild? {
-        if (configService.loadConfig().frontier.enabled &&
+        if (configService.loadConfig().frontier.enabled && !configService.loadConfig().frontier.guildOnlyClaims &&
             getKoin().get<net.lumalyte.lg.application.persistence.ClaimRepository>().getByPlayer(ownerId).any { it.teamId == null }) {
             Bukkit.getPlayer(ownerId)?.sendMessage(net.lumalyte.lg.interaction.listeners.FrontierTheme.message("Guild", "Pack your personal Founding Vault and surrender personal claims before becoming a guild owner."))
             return null

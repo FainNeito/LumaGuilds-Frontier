@@ -1,0 +1,25 @@
+# Frontier-only. Restart after editing. Chat radius is configured in RoseChat/channels.yml.
+local-notices:
+  enabled: true
+  radius: 200
+decay:
+  # Opt-in inactivity release; timing remains configurable below.
+  enabled: false
+  inactive-days: 14
+  warning-days: [7, 3, 1]
+combat:
+  above-sea-riptide-cooldown-seconds: 10
+  spear-player-base-damage-cap: 16
+  tnt-minecart-player-base-damage-cap: 20
+# Delivery remains disabled; no bot connection is installed by this configuration.
+discord:
+  enabled: false
+diplomacy:
+  max-allies: 1
+
+# Restart the server after editing. Includes the owner and offline members.
+# Existing oversized guilds keep their members but cannot recruit above this cap.
+guilds:
+  max-members: 6
+  # Blocks joins and kicks during the daily raid window; voluntary leaving remains available.
+  lock-roster-during-raids: true

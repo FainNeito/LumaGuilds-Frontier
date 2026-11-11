@@ -140,8 +140,19 @@ class FrontierWiringTest {
         every { claims.getById(existing.id) } returns existing
         every { partitions.getByChunk(any()) } returns setOf(partition)
         val config = MainConfig(claimGeometry = ClaimGeometry.CHUNKS, frontier = FrontierConfig(enabled = true))
-        val create = CreateClaim(claims, partitions, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), config)
+        val create = CreateClaim(claims, partitions, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), config,
+            clock = { Instant.parse("2026-11-11T12:00:00Z") })
         assertEquals(CreateClaimResult.InvalidLocation, create.execute(owner.id, "Overlap", Position3D(321, 64, 1), existing.worldId))
         verify(exactly = 0) { claims.add(any()) }
     }
+    @Test fun `raid hour rejects creation before territory writes with a fixed clock`() {
+        val claims = mockk<ClaimRepository>()
+        val create = CreateClaim(claims, mockk(), mockk(), mockk(), mockk(relaxed = true),
+            MainConfig(frontier = FrontierConfig(enabled = true)),
+            clock = { Instant.parse("2026-11-11T20:30:00Z") })
+        assertEquals(CreateClaimResult.RaidLocked,
+            create.execute(owner.id, "Locked", Position3D(320, 64, 0), UUID.randomUUID()))
+        verify { claims wasNot Called }
+    }
+
 }

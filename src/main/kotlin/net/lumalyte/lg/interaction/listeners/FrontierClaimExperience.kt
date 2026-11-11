@@ -115,6 +115,15 @@ class FrontierClaimExperience(
     fun claimCommand(player: Player, arguments: String) {
         val text = arguments.trim()
         when (text.substringBefore(' ').lowercase()) {
+            "migrate" -> { migrate(player,text.substringAfter(' ',"")); return }
+            "help" -> {
+                tell(player, "Use /claim to preview, /claimconfirm to claim, or /claim cancel to cancel.")
+                tell(player, "Use /claim outline for borders; /claim rename <name> names your whole territory.")
+                tell(player, "Use /autoclaim to preview automatic claiming; /unclaim for chunk removal.")
+                tell(player, "Expand around your Founding Vault. Picking it up requires confirmation and releases ALL claims.")
+                tell(player, "Claims are overworld-only. Use /raidinfo for raid times and /serverinfo for survival rules.")
+                return
+            }
             "confirm" -> { confirm(player); return }
             "cancel" -> { previews.remove(player.uniqueId); tell(player, "Preview cancelled."); return }
             "outline" -> { outlines[player.uniqueId] = clock().plusSeconds(30); tell(player, "Showing territory borders for 30 seconds."); return }
@@ -134,6 +143,55 @@ class FrontierClaimExperience(
         }
         preview(player, player.location.block.location, false, name = text.takeIf { it.isNotBlank() })
     }
+    private data class MigrationPreview(val guild: java.util.UUID,val location: Location,val expires: java.time.Instant)
+    private val migrations=mutableMapOf<java.util.UUID,MigrationPreview>()
+    private fun migrate(player: Player, argument: String) {
+        if(!config.frontier.guildOnlyClaims) { tell(player,"Guild-only migration is not enabled.");return }
+        if(config.frontier.schedule.stateAt(clock()).active) { tell(player,"Migrate outside the raid window.");return }
+        val guild=guilds.getPlayerGuilds(player.uniqueId).singleOrNull()
+        if(guild==null || members.getGuildMembers(guild.id).size!=1 || !members.hasPermission(player.uniqueId,guild.id,RankPermission.PLACE_VAULT) || !members.hasPermission(player.uniqueId,guild.id,RankPermission.MANAGE_CLAIMS)) {
+            tell(player,"Create a one-person guild before migrating. Its rank must manage claims and place vaults.");return
+        }
+        val legacy=claims.getByPlayer(player.uniqueId).filter { it.teamId==null }
+        if(legacy.size!=1 || claims.getByTeam(guild.id).isNotEmpty()) { tell(player,"Migration needs one existing solo territory and a guild with no territory. Staff must review other cases; no land was changed.");return }
+        val root=legacy.single()
+        val existing=guild.vaultChestLocation
+        val l=if(existing!=null && guild.vaultStatus==net.lumalyte.lg.domain.entities.VaultStatus.AVAILABLE) {
+            val world=Bukkit.getWorld(existing.worldId) ?: run { tell(player,"Vault world unavailable.");return }
+            Location(world,existing.x.toDouble(),existing.y.toDouble(),existing.z.toDouble())
+        } else player.getTargetBlockExact(5)?.takeIf { it.type==Material.CHEST }?.location ?: player.location.block.location
+        if(l.world!=player.world || l.distanceSquared(player.location)>64) { tell(player,"Stand near your migration vault.");return }
+        if(l.world.uid!=root.worldId || (l.blockX shr 4)!=(root.position.x shr 4) || (l.blockZ shr 4)!=(root.position.z shr 4)) { tell(player,"Stand inside your original solo Founding chunk at the new guild vault location.");return }
+        if(config.frontier.serverTerritory?.contains(l.blockX,l.blockZ)==true) { tell(player,"This legacy territory overlaps server land. Staff must review it before migration; nothing was changed.");return }
+        if(!objectives.siege.canReplace(FrontierOwner(FrontierOwnerType.PERSONAL,player.uniqueId),clock()) || !objectives.siege.canReplace(FrontierOwner(FrontierOwnerType.GUILD,guild.id),clock())) { tell(player,"Wait until objective cleanup and replacement cooldowns finish.");return }
+        if(argument!="confirm") {
+            migrations[player.uniqueId]=MigrationPreview(guild.id,l.clone(),clock().plusSeconds(30))
+            tell(player,"Migrate all territory to ${guild.name} and place its Founding Vault here. The old barrel and its items remain untouched. All land becomes raidable once conversion succeeds. Confirm within 30 seconds with /claim migrate confirm.");return
+        }
+        val preview=migrations.remove(player.uniqueId)
+        if(preview==null || preview.guild!=guild.id || clock()>=preview.expires || preview.location!=l) { tell(player,"Location or guild changed. Preview with /claim migrate again.");return }
+        fun physicalVaultReady(): Boolean {
+            val chest=l.block.state as? org.bukkit.block.Chest ?: return false
+            return chest.persistentDataContainer.get(NamespacedKey(plugin,"vault_guild_id"),PersistentDataType.STRING)==guild.id.toString() &&
+                chest.persistentDataContainer.has(NamespacedKey(plugin,"vault_marker"),PersistentDataType.BYTE) && vaults.getGuildForVaultChest(l)?.id==guild.id
+        }
+        try {
+            val result=net.lumalyte.lg.application.services.FrontierGuildMigration(claims).migrate(player.uniqueId,guild.id,l.world.uid,Position3D(l.blockX,l.blockY,l.blockZ)) {
+                val current=guilds.getGuild(guild.id) ?: return@migrate false
+                if(current.vaultStatus==net.lumalyte.lg.domain.entities.VaultStatus.AVAILABLE) {
+                    val v=current.vaultChestLocation
+                    v!=null && v.worldId==l.world.uid && v.x==l.blockX && v.y==l.blockY && v.z==l.blockZ && physicalVaultReady()
+                } else {
+                    val emptyChest=(l.block.state as? org.bukkit.block.Chest)?.inventory?.contents?.all { it==null || it.type.isAir } == true
+                    if((!l.block.type.isAir && !emptyChest) || !l.block.getRelative(0,-1,0).type.isSolid) return@migrate false
+                    l.block.setType(Material.CHEST,false)
+                    vaults.placeVaultChest(current,l,player) is VaultResult.Success && physicalVaultReady()
+                }
+            }
+            tell(player,if(result) "Migration complete. Your land now belongs to ${guild.name}. Old barrel items remain in place; set your shared home with /guild sethome." else "Migration not completed. Existing land and items remain. Retry at the same vault location or contact staff.")
+        } catch(failure: Exception) { plugin.logger.log(java.util.logging.Level.SEVERE,"Guild migration pending; legacy land retained",failure);tell(player,"Migration needs a retry at the same location. Do not remove the new chest; contact staff if needed.") }
+    }
+
     private fun draw(player: Player, x0: Int, z0: Int, x1: Int, z1: Int, color: Color) {
         // Bounded per-viewer rendering, no chunk loads or world edits.
         val y = player.location.y + 0.25
@@ -172,6 +230,8 @@ class FrontierClaimExperience(
     fun preview(player: Player, location: Location, existingBell: Boolean, bellData: org.bukkit.block.data.BlockData? = null, name: String? = null, consumeBell: Boolean = false) {
         previews.remove(player.uniqueId)
         val owner = owner(player)
+        if (config.frontier.guildOnlyClaims && owner.type == FrontierOwnerType.PERSONAL) { tell(player,"Create or join a guild first. One-person guilds are welcome."); return }
+        if (config.frontier.guildOnlyClaims && claims.getByPlayer(player.uniqueId).any { it.teamId == null }) { tell(player,"Migrate your existing solo land with /claim migrate before claiming more land."); return }
         if (!player.hasPermission("bellclaims.action.bell") || !manages(player, owner)) { tell(player,"You cannot manage this territory."); return }
         if (location.world.environment != World.Environment.NORMAL || location.world.name != config.frontier.worldName) { tell(player,"Territories belong in the Frontier overworld."); return }
         if (config.frontier.schedule.stateAt(clock()).active || !objectives.siege.canReplace(owner, clock())) { tell(player,"Claiming is locked during raids and replacement cooldowns."); return }
@@ -182,7 +242,11 @@ class FrontierClaimExperience(
         val position = Position3D(location.blockX,location.blockY,location.blockZ)
         if (!territory.canExtend(owner,location.world.uid,position.getChunk())) { tell(player,"Claim an edge-adjacent chunk connected back to your Founding Vault."); return }
         if (valid.execute(position,location.world.uid,player.uniqueId, if (owner.type == FrontierOwnerType.GUILD) setOf(owner.id) else emptySet()) != IsNewClaimLocationValidResult.Valid) {
-            tell(player,"This chunk overlaps land, its buffer, reserved spawn, or the world border."); return
+            val serverLand = config.frontier.serverTerritory
+            if (serverLand != null && location.world.name == config.frontier.worldName && serverLand.contains(location.blockX,location.blockZ))
+                tell(player,"${serverLand.name} is public server territory. You may build and fight here, but cannot claim it.")
+            else tell(player,"This chunk overlaps land, its buffer, reserved spawn, or the world border.")
+            return
         }
         previews[player.uniqueId] = Preview(location.clone(),clock().plusSeconds(30),territoryName,owner,foundation?.id)
         tell(player,"Preview: $territoryName — chunk ${position.getChunk().x}, ${position.getChunk().z}. ${if(foundation == null) "Your Founding Vault will be placed here." else "Expands your territory; no extra vault or bell is placed."}")

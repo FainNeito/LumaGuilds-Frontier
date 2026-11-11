@@ -46,7 +46,7 @@ class FrontierRaidExplosionsTest {
         listener.onEntityExplosion(event)
         return list
     }
-    @Test fun `TNT damages ordinary claim blocks during raids`() { assertEquals(listOf(block),explode(mockk<TNTPrimed>())) }
+    @Test fun `TNT damages ordinary claim blocks during raids`() { assertEquals(listOf(block),explode(mockk<TNTPrimed> { every { source } returns null })) }
     @Test fun `wither and skull explosions cannot damage claimed terrain even during raids`() {
         assertTrue(explode(mockk<Wither>()).isEmpty()); assertTrue(explode(mockk<WitherSkull>()).isEmpty())
         verify(exactly=0) { objectives.siege.hit(any(),any(),any(),any(),any()) }
@@ -61,7 +61,7 @@ class FrontierRaidExplosionsTest {
         every { block.type } returns Material.CHEST
         every { vaults.getGuildForVaultChest(location) } returns guild
         every { objectives.siege.hit(any(),any(),false,any(),4) } returns FrontierSiegeResult.Progress(4,20)
-        assertTrue(explode(mockk<TNTPrimed>()).isEmpty())
+        assertTrue(explode(mockk<TNTPrimed> { every { source } returns null }).isEmpty())
         verify(exactly=1) { objectives.siege.hit(FrontierOwner(FrontierOwnerType.GUILD,guild.id),any(),false,any(),4) }
         verify(exactly=0) { vaults.removeVaultChest(any(),any()) }
     }

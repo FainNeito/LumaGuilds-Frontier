@@ -18,6 +18,7 @@ class CreateClaim(private val claimRepository: ClaimRepository, private val part
                   private val config: MainConfig,
                   private val frontierReplacement: net.lumalyte.lg.application.services.FrontierReplacementPolicy? = null,
                   private val ranks: net.lumalyte.lg.application.services.RankService? = null,
+                  private val clock: () -> java.time.Instant = java.time.Instant::now,
 ) {
 
     fun execute(playerId: UUID, name: String, position3D: Position3D, worldId: UUID): net.lumalyte.lg.application.results.claim.CreateClaimResult {
@@ -76,11 +77,12 @@ class CreateClaim(private val claimRepository: ClaimRepository, private val part
     }
     fun executeFrontier(playerId: UUID, name: String, position: Position3D, worldId: UUID, guildId: UUID? = null): net.lumalyte.lg.application.results.claim.CreateClaimResult {
         check(config.frontier.enabled)
+        if (config.frontier.guildOnlyClaims && guildId == null) return net.lumalyte.lg.application.results.claim.CreateClaimResult.InvalidLocation
         if (guildId == null && guildService.getPlayerGuilds(playerId).any { ranks?.getPlayerRank(playerId,it.id)?.priority == 0 })
             return net.lumalyte.lg.application.results.claim.CreateClaimResult.InvalidLocation
         val owner = if (guildId == null) net.lumalyte.lg.application.services.FrontierOwner(net.lumalyte.lg.application.services.FrontierOwnerType.PERSONAL, playerId)
             else net.lumalyte.lg.application.services.FrontierOwner(net.lumalyte.lg.application.services.FrontierOwnerType.GUILD, guildId)
-        if (config.frontier.schedule.stateAt(java.time.Instant.now()).active || frontierReplacement?.allows(owner) == false)
+        if (config.frontier.schedule.stateAt(clock()).active || frontierReplacement?.allows(owner) == false)
             return net.lumalyte.lg.application.results.claim.CreateClaimResult.RaidLocked
         if (guildId != null && guildService.getPlayerGuilds(playerId).none { it.id == guildId })
             return net.lumalyte.lg.application.results.claim.CreateClaimResult.InvalidLocation

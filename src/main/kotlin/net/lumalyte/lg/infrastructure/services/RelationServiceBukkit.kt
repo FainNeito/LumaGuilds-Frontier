@@ -20,8 +20,24 @@ class RelationServiceBukkit(
     private val memberService: MemberService,
     private val guildRepository: GuildRepository
 ) : RelationService {
+    /** Unlimited for SMP; Frontier configures a small cap at startup. */
+    var allianceLimit: Int = Int.MAX_VALUE
+    private fun allianceCapacity(first: UUID, second: UUID): Boolean = listOf(first,second).all { guild ->
+        getGuildRelations(guild).count { it.type == RelationType.ALLY && it.isActive() } < allianceLimit
+    }
     
     private val logger = LoggerFactory.getLogger(RelationServiceBukkit::class.java)
+    @Synchronized override fun breakAlliance(relationId: UUID, guildId: UUID, actorId: UUID): Boolean {
+        if (!canManageRelations(actorId,guildId)) return false
+        val relation=relationRepository.getById(relationId) ?: return false
+        if (!relation.involves(guildId) || relation.type!=RelationType.ALLY || !relation.isActive()) return false
+        if (!relationRepository.remove(relation.id)) return false
+        removeAllyInboundWhitelist(relation.guildA,relation.guildB)
+        val neutral=relation.copy(type=RelationType.NEUTRAL,updatedAt=Instant.now())
+        runCatching { Bukkit.getPluginManager().callEvent(GuildRelationChangeEvent(relation.guildA,relation.guildB,RelationType.NEUTRAL,neutral)) }
+            .onFailure { logger.warn("Unable to announce alliance end ${relation.id}",it) }
+        return true
+    }
 
     /** Checks whether [guildId] is the recorded requester of [relation], allowing legacy null rows. */
     private fun isRequester(relation: Relation, guildId: UUID): Boolean =
@@ -31,8 +47,9 @@ class RelationServiceBukkit(
         /** Pending requests outstanding longer than this are auto-resolved by cleanupStaleRelations. */
         private val PENDING_REQUEST_TTL: Duration = Duration.ofDays(14)
     }
-    override fun requestAlliance(requestingGuildId: UUID, targetGuildId: UUID, actorId: UUID): Relation? {
+    @Synchronized override fun requestAlliance(requestingGuildId: UUID, targetGuildId: UUID, actorId: UUID): Relation? {
         try {
+            if (allianceLimit != Int.MAX_VALUE && !allianceCapacity(requestingGuildId,targetGuildId)) return null
             // Validate permissions
             if (!canManageRelations(actorId, requestingGuildId)) {
                 logger.warn("Player $actorId does not have permission to manage relations for guild $requestingGuildId")
@@ -101,7 +118,7 @@ class RelationServiceBukkit(
         }
     }
     
-    override fun acceptAlliance(relationId: UUID, acceptingGuildId: UUID, actorId: UUID): Relation? {
+    @Synchronized override fun acceptAlliance(relationId: UUID, acceptingGuildId: UUID, actorId: UUID): Relation? {
         try {
             // Validate permissions
             if (!canManageRelations(actorId, acceptingGuildId)) {
@@ -134,6 +151,7 @@ class RelationServiceBukkit(
                 return null
             }
             
+            if (allianceLimit != Int.MAX_VALUE && !allianceCapacity(relation.guildA,relation.guildB)) return null
             // Update relation to active
             val updatedRelation = relation.copy(
                 status = RelationStatus.ACTIVE,

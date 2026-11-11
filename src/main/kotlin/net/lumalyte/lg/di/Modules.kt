@@ -311,7 +311,7 @@ fun claimsModule() = module {
     singleOf(::ClaimManagementAuthorizer)
 
     // Claim actions
-    singleOf(::CreateClaim)
+    single { CreateClaim(get(), get(), get(), get(), get(), get(), get(), get()) }
     single<net.lumalyte.lg.application.services.FrontierSiegeStore> {
         net.lumalyte.lg.infrastructure.persistence.claims.FrontierSiegeStoreFiles(
             get<org.bukkit.plugin.java.JavaPlugin>().dataFolder.toPath().resolve("frontier-sieges"))
@@ -504,7 +504,7 @@ fun guildsModule() = module {
             },
         ).apply {
             mayBecomeOwner = { playerId ->
-                !get<net.lumalyte.lg.config.MainConfig>().frontier.enabled ||
+                !get<net.lumalyte.lg.config.MainConfig>().frontier.enabled || get<net.lumalyte.lg.config.MainConfig>().frontier.guildOnlyClaims ||
                     get<net.lumalyte.lg.application.persistence.ClaimRepository>().getByPlayer(playerId).none { it.teamId == null }
             }
         }

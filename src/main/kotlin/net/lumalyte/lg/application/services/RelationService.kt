@@ -9,6 +9,7 @@ import java.util.UUID
  * Service interface for managing guild relations and diplomatic flows.
  */
 interface RelationService {
+    fun breakAlliance(relationId: UUID, guildId: UUID, actorId: UUID): Boolean = false
     
     /**
      * Requests an alliance between two guilds.

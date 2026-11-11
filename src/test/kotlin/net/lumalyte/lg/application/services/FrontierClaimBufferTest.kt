@@ -26,11 +26,13 @@ class FrontierClaimBufferTest {
         every { worlds.isClaimWorld(any(), any()) } returns true
         return IsNewClaimLocationValid(claims, partitions, worlds, config)
     }
-    @Test fun `foreign side and diagonal adjacency require an empty chunk`() {
+    @Test fun `foreign side and diagonal adjacency require four empty chunks`() {
         val valid = validator()
-        for ((x,z) in listOf(16 to 0, -1 to 0, 16 to 16, -1 to -1))
+        for ((x,z) in listOf(16 to 0, 32 to 0, 48 to 0, 64 to 0,
+                -1 to 0, -64 to 0, 64 to 64, -64 to -64))
             assertEquals(IsNewClaimLocationValidResult.Overlap, valid.execute(Position3D(x,64,z),world,owner))
-        assertEquals(IsNewClaimLocationValidResult.Valid, valid.execute(Position3D(32,64,0),world,owner))
+        for ((x,z) in listOf(80 to 0, -80 to 0, 80 to 80, -80 to -80))
+            assertEquals(IsNewClaimLocationValidResult.Valid, valid.execute(Position3D(x,64,z),world,owner))
     }
     @Test fun `same owner may extend contiguously but cannot overlap`() {
         val valid = validator(owner)

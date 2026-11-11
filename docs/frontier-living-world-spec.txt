@@ -1,0 +1,35 @@
+Frontier living-world additions - SPEAR work record
+
+Specification (2026-11-11)
+FW-01: WHEN a player sends ordinary chat, RoseChat SHALL deliver it only within 200 blocks in the same world. Guild/private/staff messaging and intentional server announcements SHALL retain their existing audience.
+FW-02: WHEN players join, leave, or die, Frontier SHALL suppress the vanilla global broadcast and send the event only to nearby players. Hidden players SHALL NOT be revealed to observers who cannot see them.
+FW-03: WHEN no current member performs qualifying movement or interaction for 21 days, territory SHALL lose protection through the durable FrontierClaimRelease path. Existing territories SHALL receive a fresh grace period at first observation. Decay SHALL NOT delete blocks, inventories, vault contents, or start a raid replacement cooldown. Persistent state errors SHALL prevent expiry. Guild activity SHALL consider current membership, not a departed member's activity.
+FW-04: WHEN remaining inactivity time crosses 7, 3, or 1 days, owners SHALL receive an in-game warning when online and opted-in Discord delivery when available. Returning players SHALL see pending warnings before their next qualifying action resets inactivity. Claims SHALL never expire while an owner/current member is online.
+FW-05: WHEN an opted-in linked owner is raided or loses a vault, Frontier SHALL send a private Discord alert through the configured DiscordSRV account-link provider. Repeated attack messages SHALL be limited to one per recipient per 5 minutes; defeat is independent. Ordinary visitor messages SHALL NOT go to Discord. Missing provider, unlinking, or blocked DMs SHALL fail without affecting raids.
+FW-06: WHEN above-sea-level Riptide succeeds, Frontier SHALL enforce a configurable 10-second player cooldown across tridents. Denied/cancelled use SHALL NOT restart the timer. Existing MaceGuard and CombatLogX restrictions/retags SHALL remain authoritative.
+FW-07: WHEN an armored horse takes combat damage, configurable 20 percent additional protection SHALL apply without protecting its rider. Spear and TNT-minecart damage to players SHALL have separate configurable base-damage caps (16 and 20 health points); armor mitigation still applies. Vault TNT damage SHALL remain unchanged.
+FW-08: /serverinfo, /rules and /claim help SHALL explain actual Frontier settings and commands. Existing one guild/solo home rules and combat restrictions SHALL remain unchanged.
+
+Implementation plan
+1. Pure policy tests RED, then policy GREEN.
+2. Frontier-only runtime, atomic activity persistence, optional Discord bridge, RoseChat radius config.
+3. Wire claim/raid notifications and guides, test behavior and snapshot startup.
+4. Deploy only verified artifacts to Frontier; preserve SMP, worlds, database and prior custom addons.
+
+Tooling boundary: no installed SPEAR skill, EARS validator or state helper found. This uses the repository's documented requirements/implementation/evidence convention; no automated SPEAR gate is claimed.
+Evidence: recorded below.
+
+Implementation / verification (2026-11-11)
+- FW-01: ci/frontier/channels.yml adds RoseChat radius 200 to the existing default channel; private/guild/staff channel configuration retained. Live baseline downloaded before packaging.
+- FW-02/06/07: FrontierLivingWorld registers only in Frontier mode; local messages respect canSee and world/radius, successful above-sea Riptide applies player-based cooldown, player spear/cart caps and armored-horse damage reduction are separate.
+- FW-03/04: FrontierClaimDecay records player activity and founding-claim grace in atomically replaced YAML; aggregates current membership; online players suspend expiry; load/save failure disables expiry until restart. Durable FrontierClaimRelease removes protection and keeps physical blocks and stored vault contents. Warning thresholds 7/3/1 days, with login evaluation before movement.
+- FW-05: /raidalerts stores opt-in preferences; optional DiscordSRV adapter and raid/defeat hooks added. Server delivery is DISABLED. No bot installed, no credentials configured, no Discord messages sent. Live linked-account delivery remains untested.
+- FW-08: /serverinfo, /rules and /claim help describe the Frontier rules; existing homes untouched.
+- RED: living-world-red.log captured missing policy compile failure before implementation.
+- GREEN: 98 selected tests (96 Frontier plus 2 war-banner cases), zero failures/errors/skips. Includes grace across restart, online-owner protection, former-member exclusion, corrupt-state and failed-save safety, Riptide across tridents, minecart player damage cap and horse armor. Existing TNT tests now explicitly specify null source for unattributed explosions.
+- Build: LumaGuilds-3.0.0-frontier-test.17.jar; SHA-256 a645fe920969a23db222040c2e4f3fca08c6735276e9ef229d94833d02bb9fae.
+- Snapshot 8 loopback lab: startup and graceful shutdown succeeded, zero ERROR/SEVERE log entries. Guides and warzone validate succeeded. Existing snapshot compatibility warnings remain. No client gameplay acceptance claimed.
+- Package: frontier-26.4-snapshot8/living-world/frontier-living-world.zip; only plugin JAR, new settings and RoseChat channels. Rollback restores .16 and downloaded original channels; new settings/state may remain inert on .16. Worlds, databases and SMP excluded.
+- Bloom deployment: test.17 confirmed running on 942c6700; all 20 plugins enabled, serverinfo printed the new guide and warzone validate passed. Downloaded evidence/living-world-bloom.log shows zero ERROR/SEVERE entries. SMP untouched. Client gameplay testing remains deferred.
+
+Revision 2026-11-11: user removed stronger horse armor and reduced inactivity decay to 14 days. FW-03 now uses 14 days; FW-07 horse protection is withdrawn, vanilla horse armor remains. Warnings stay at 7/3/1 days remaining. RED decay14-red.log: 8 tests, two expected failures (14-day default deadline and armored-horse no-extra-reduction). GREEN decay14-green.log: all 98 selected tests pass, zero failures/errors/skips. test.18 built; snapshot lab startup and shutdown passed with no ERROR/SEVERE entries (decay14-lab.log). Bloom 942c6700 running test.18; /serverinfo confirms 14 inactive days and no horse bonus. Downloaded decay14-bloom.log has zero ERROR/SEVERE entries. Existing activity state preserved; no client gameplay test performed.

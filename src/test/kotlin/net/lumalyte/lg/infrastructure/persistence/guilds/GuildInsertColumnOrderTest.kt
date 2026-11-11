@@ -25,6 +25,38 @@ internal class GuildInsertColumnOrderTest : RewardSqlTestFixture() {
     private val world = UUID.fromString("00000000-0000-0000-0000-0000000000aa")
     private val ally = UUID.fromString("00000000-0000-0000-0000-0000000000bb")
 
+    @Test
+    fun `description survives insert update clear and repository restarts`() {
+        val storage = openStorage()
+        val repository = migratedRepository(storage)
+        val guild = Guild(UUID.randomUUID(), "Description", createdAt = Instant.now(),
+            description = "Builder's refuge — welcome!")
+        assertTrue(repository.add(guild))
+        var loaded = GuildRepositorySQLite(storage).getById(guild.id)!!
+        assertEquals(guild.description, loaded.description)
+        assertEquals(guild.name, loaded.name)
+        assertTrue(repository.update(loaded.copy(description = "New description")))
+        loaded = GuildRepositorySQLite(storage).getById(guild.id)!!
+        assertEquals("New description", loaded.description)
+        assertTrue(repository.update(loaded.copy(description = null)))
+        assertNull(GuildRepositorySQLite(storage).getById(guild.id)!!.description)
+    }
+
+    @Test
+    fun `legacy rows without description migrate without losing guild identity`() {
+        val storage = openStorage()
+        val repository = migratedRepository(storage)
+        val guild = Guild(UUID.randomUUID(), "LegacyDescription", createdAt = Instant.now())
+        assertTrue(repository.add(guild))
+        storage.connection.executeUpdate("ALTER TABLE guilds DROP COLUMN description")
+        val loaded = GuildRepositorySQLite(storage).getById(guild.id)!!
+        assertEquals(guild.id, loaded.id)
+        assertEquals(guild.name, loaded.name)
+        assertNull(loaded.description)
+        assertTrue(GuildRepositorySQLite(storage).update(loaded.copy(description = "Now durable")))
+        assertEquals("Now durable", GuildRepositorySQLite(storage).getById(guild.id)!!.description)
+    }
+
     /** Add stores theme and ally home in their own columns. */
     @DisplayName("add stores theme and ally home in their own columns")
     @Test

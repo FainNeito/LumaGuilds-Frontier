@@ -20,10 +20,12 @@ data class FrontierConfig(
     val spawnMaxRadius: Int = 160,
     val reservedSpawnRadius: Int = 0,
     val claimTitles: Boolean = true,
-    val foreignClaimBufferChunks: Int = 1,
+    val foreignClaimBufferChunks: Int = 4,
     val endBorderSize: Int = 512,
     val raidMiningSpeed: Double = 0.35,
     val tntVaultDamage: Int = 4,
+    val guildOnlyClaims: Boolean = false,
+    val serverTerritory: FrontierServerTerritory? = null,
 ) {
     init {
         require(foreignClaimBufferChunks in 0..8)
@@ -43,6 +45,7 @@ data class FrontierConfig(
 
     fun permitsLand(area: net.lumalyte.lg.domain.values.Area): Boolean {
         if (!enabled) return true
+        if (serverTerritory?.overlaps(area) == true) return false
         val low = area.lowerPosition2D
         val high = area.upperPosition2D
         val radius = reservedSpawnRadius

@@ -76,8 +76,18 @@ class FrontierHomesTest {
             every { members.hasPermission(any(),any(),any()) } returns true
             player.teleport(destination)
         }
-        fun homes() = FrontierHomes(plugin,FrontierConfig(enabled=true),claims,partitions,guilds,members) { now }
+        fun homes(guildOnly: Boolean=false) = FrontierHomes(plugin,FrontierConfig(enabled=true,guildOnlyClaims=guildOnly),claims,partitions,guilds,members) { now }
         fun advance() { now=now.plusSeconds(6) }
+    }
+    @Test fun `home aliases share guild slot and cannot bypass setting permission`() = scenario {
+        claim=claim.copy(teamId=guild.id)
+        val h=homes(true)
+        h.command(player,false,true)
+        player.teleport(origin)
+        every { members.hasPermission(any(),any(),any()) } returns false
+        h.command(player,false,true)
+        h.command(player,true,false); advance(); h.tick()
+        assertEquals(destination,player.location)
     }
     @Test fun `single personal slot survives reload and replacing it changes destination`() = scenario {
         homes().command(player,false,true)
@@ -128,5 +138,37 @@ class FrontierHomesTest {
         every { members.hasPermission(any(),any(),any()) } returns true
         player.teleport(destination); h.command(player,true,true); player.teleport(origin); h.command(player,true,false)
         member=false; advance(); h.tick(); assertEquals(origin,player.location)
+    }
+
+    @Test fun `guild home survives reload with facing and remains a single slot`() = scenario {
+        claim=claim.copy(teamId=guild.id)
+        destination.yaw=90f; destination.pitch=15f
+        player.teleport(destination); homes().command(player,true,true)
+        player.teleport(origin)
+        val h=homes(); h.command(player,true,false); advance(); h.tick()
+        assertEquals(destination,player.location)
+        assertNull(h.loadLocation("PERSONAL.${player.uniqueId}.location"))
+    }
+
+    @Test fun `teleport cooldown blocks before thirty seconds and allows at the boundary`() = scenario {
+        val h=homes(); h.command(player,false,true); player.teleport(origin)
+        h.command(player,false,false); advance(); h.tick()
+        assertEquals(destination,player.location)
+        val completed=now
+        player.teleport(origin); now=completed.plusSeconds(29)
+        h.command(player,false,false); now=completed.plusSeconds(30); h.tick()
+        assertEquals(origin,player.location)
+        h.command(player,false,false); advance(); h.tick()
+        assertEquals(destination,player.location)
+    }
+
+    @Test fun `failed home save preserves previous home in memory and after reload`() = scenario {
+        val h=homes(); h.command(player,false,true)
+        // A directory at the temporary-file path reliably rejects the write on all platforms.
+        assertTrue(plugin.dataFolder.resolve("frontier-homes.yml.tmp").mkdir())
+        player.teleport(origin); h.command(player,false,true)
+        val path="PERSONAL.${player.uniqueId}.location"
+        assertEquals(destination,h.loadLocation(path))
+        assertEquals(destination,homes().loadLocation(path))
     }
 }

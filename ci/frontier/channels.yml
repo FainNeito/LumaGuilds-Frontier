@@ -1,9 +1,10 @@
 # Frontier-only channels. Guild recipients are enforced by LumaGuildsChannel.
 global:
   default: true
+  radius: 200
   visible-anywhere: true
   formats:
-    chat: '&#EFE5D0{player} &#B5ACA0» &#EFE5D0{message}'
+    chat: '&#B5ACA0[Local] &#EFE5D0{player} &#B5ACA0» &#EFE5D0{message}'
 staff:
   visible-anywhere: true
   commands: [staff]

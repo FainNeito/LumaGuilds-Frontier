@@ -1,0 +1,51 @@
+# Frontier-only. Restart to apply. Sound names are Minecraft namespaced keys.
+# No resource pack required. Entry alerts are recipient-throttled across territory chunks.
+enabled: true
+titles: true
+sounds: true
+events:
+  claim-enter:
+    sound: minecraft:block.note_block.chime
+    volume: 0.25
+    pitch: 1.2
+    cooldown-seconds: 5
+  visitor:
+    sound: minecraft:block.note_block.bell
+    volume: 0.4
+    pitch: 1.2
+    cooldown-seconds: 30
+  raid:
+    sound: minecraft:block.bell.use
+    volume: 0.65
+    pitch: 0.7
+    cooldown-seconds: 30
+  defeat:
+    sound: minecraft:entity.wither.death
+    volume: 0.45
+    pitch: 0.7
+    cooldown-seconds: 0
+  victory:
+    sound: minecraft:ui.toast.challenge_complete
+    volume: 0.55
+    pitch: 1.0
+    cooldown-seconds: 0
+  raid-open:
+    sound: minecraft:entity.ender_dragon.growl
+    volume: 0.4
+    pitch: 0.8
+    cooldown-seconds: 5
+  raid-close:
+    sound: minecraft:block.note_block.chime
+    volume: 0.5
+    pitch: 1.4
+    cooldown-seconds: 5
+  raid-warning:
+    sound: minecraft:block.note_block.bell
+    volume: 0.4
+    pitch: 0.9
+    cooldown-seconds: 30
+  banner:
+    sound: minecraft:item.goat_horn.sound.0
+    volume: 0.5
+    pitch: 1.0
+    cooldown-seconds: 15
