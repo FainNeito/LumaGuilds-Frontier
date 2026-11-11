@@ -1,4 +1,5 @@
 package net.lumalyte.lg.interaction.menus.management
+import net.lumalyte.lg.interaction.listeners.sendFrontierMessage
 
 import net.lumalyte.lg.utils.inventoryframework.addPane
 import net.badgersmc.nexus.i18n.LangService
@@ -56,11 +57,11 @@ class ClaimPlayerPermissionsMenu(private val menuNavigator: MenuNavigator, priva
     override fun open() {
         // Validate that claim and targetPlayer are provided
         val validClaim = claim ?: run {
-            player.sendMessage(lang.msg("menu.common.feedback.no_claim"))
+            player.sendFrontierMessage(lang.msg("menu.common.feedback.no_claim"))
             return
         }
         val validTarget = targetPlayer ?: run {
-            player.sendMessage(lang.msg("menu.common.feedback.no_target_player"))
+            player.sendFrontierMessage(lang.msg("menu.common.feedback.no_target_player"))
             return
         }
 

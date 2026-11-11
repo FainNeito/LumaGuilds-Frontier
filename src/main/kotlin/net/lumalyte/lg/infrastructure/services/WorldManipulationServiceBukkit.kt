@@ -9,6 +9,9 @@ import org.bukkit.Material
 import java.util.UUID
 
 class WorldManipulationServiceBukkit : WorldManipulationService {
+    override fun isClaimWorld(worldId: UUID, worldName: String): Boolean =
+        Bukkit.getWorld(worldId)?.let { it.name == worldName && it.environment == org.bukkit.World.Environment.NORMAL } == true
+
     override fun breakWithoutItemDrop(worldId: UUID, position: Position3D): Boolean {
         val world = Bukkit.getWorld(worldId) ?: return false
         val block = world.getBlockAt(position.toLocation(world))

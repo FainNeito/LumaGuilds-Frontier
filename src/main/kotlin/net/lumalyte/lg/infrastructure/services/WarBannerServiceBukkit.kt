@@ -40,6 +40,8 @@ class WarBannerServiceBukkit(
     private val teleportationService: TeleportationService,
     private val lang: LangService,
 ) {
+    var mayTeleport: (Player) -> Boolean = { true }
+
     init {
         Bukkit.getScheduler().runTaskTimer(
             plugin,
@@ -55,7 +57,9 @@ class WarBannerServiceBukkit(
         val item = currentGuildBanner(guild)
         item.amount = 1
         item.name(lang.gui("war_banner.item.name", "guild" to guild.name))
-        item.lore(lang.gui(
+        if (configService.loadConfig().frontier.enabled) {
+            item.lore("Raid window only - One placement per guild per 24 hours")
+        } else item.lore(lang.gui(
             "war_banner.item.lore.cost",
             "cost" to configService.loadConfig().warBanner.rawGoldCost,
         ))
@@ -171,6 +175,7 @@ class WarBannerServiceBukkit(
         guildId: UUID,
         now: Long = System.currentTimeMillis(),
     ): WarBannerTeleportResult {
+        if (!mayTeleport(player)) return WarBannerTeleportResult.UNSAFE
         val state = core.activeForMember(player.uniqueId, guildId, now)
             ?: return WarBannerTeleportResult.NO_ACTIVE_BANNER
         val world = Bukkit.getWorld(state.worldId)
@@ -191,7 +196,10 @@ class WarBannerServiceBukkit(
         if (!GuildHomeSafety.evaluateSafety(target).safe) {
             return WarBannerTeleportResult.UNSAFE
         }
-        teleportationService.startTeleport(player, target)
+        teleportationService.startTeleportGuarded(player, target, null) {
+            mayTeleport(player) && core.activeForMember(player.uniqueId, guildId, System.currentTimeMillis())?.bannerId == state.bannerId &&
+                isPhysical(state) && GuildHomeSafety.evaluateSafety(target).safe
+        }
         return WarBannerTeleportResult.STARTED
     }
 

@@ -44,6 +44,7 @@ class GuildVaultServiceBukkit(
     private val rankService: RankService,
     private val getClaimAtPosition: net.lumalyte.lg.application.actions.claim.GetClaimAtPosition?,
     private val lang: LangService,
+    private val frontierReplacement: net.lumalyte.lg.application.services.FrontierReplacementPolicy? = null,
 ) : GuildVaultService {
 
     private val logger = LoggerFactory.getLogger(GuildVaultServiceBukkit::class.java)
@@ -56,6 +57,13 @@ class GuildVaultServiceBukkit(
     private val vaultMarkerKey = NamespacedKey(plugin, "vault_marker")
 
     override fun placeVaultChest(guild: Guild, location: Location, player: Player): VaultResult<Guild> {
+        if (frontierReplacement?.allows(net.lumalyte.lg.application.services.FrontierOwner(
+                net.lumalyte.lg.application.services.FrontierOwnerType.GUILD, guild.id)) == false) {
+            return VaultResult.Failure("Vault replacement is locked by an active siege, pending cleanup, or raid cooldown.")
+        }
+        val frontier = configService.loadConfig().frontier
+        if (frontier.enabled && frontier.schedule.stateAt(java.time.Instant.now()).active)
+            return VaultResult.Failure("Vaults may only be placed or relocated outside the raid window.")
         // Check if guild already has a vault placed (but allow replacing if UNAVAILABLE)
         if (guild.vaultStatus == VaultStatus.AVAILABLE) {
             return VaultResult.Failure("Guild already has a vault placed. Break it first to move it.")
@@ -127,7 +135,7 @@ class GuildVaultServiceBukkit(
         val world = location.world ?: return { VaultResult.Failure("World not found") }
         // Capture before guild deletion can cascade to vault rows. Preparation changes no state.
         val items = vaultInventoryManager.getOrLoadVault(guild.id).slots
-            .filterKeys { it != 0 }.values.filterNotNull().map { it.clone() }
+            .filterKeys { it != 0 || !configService.loadConfig().vault.goldCurrencyEnabled }.values.filterNotNull().map { it.clone() }
         val balance = vaultRepository.getGoldBalance(guild.id)
         val gold = if (balance > 0) net.lumalyte.lg.application.utilities.GoldBalanceButton.convertToItems(balance)
             else emptyList()
@@ -162,6 +170,7 @@ class GuildVaultServiceBukkit(
         // Mark vault as being removed BEFORE closing any inventories
         // This prevents the InventoryCloseEvent from re-syncing items back to cache
         vaultInventoryManager.markVaultAsBeingRemoved(guild.id)
+        try {
 
         // Force-close all open vault inventories
         // This must happen AFTER marking the vault as being removed
@@ -226,6 +235,9 @@ class GuildVaultServiceBukkit(
             vaultInventoryManager.unmarkVaultAsBeingRemoved(guild.id)
             VaultResult.Failure("Failed to update guild vault status")
         }
+        } finally {
+            vaultInventoryManager.unmarkVaultAsBeingRemoved(guild.id)
+        }
     }
 
     override fun openVaultInventory(player: Player, guild: Guild): VaultResult<Unit> {
@@ -279,13 +291,17 @@ class GuildVaultServiceBukkit(
         }
     }
 
-    override fun getCapacityForLevel(level: Int): Int = VaultLevelCapacity.slots(level)
+    override fun getCapacityForLevel(level: Int): Int =
+        if (configService.loadConfig().frontier.enabled) 54 else VaultLevelCapacity.slots(level)
 
     override fun getPermanentCapacityForGuild(guild: Guild): Int =
         vaultRepository.getPermanentCapacity(guild.id, getCapacityForLevel(guild.level))
 
     override fun isValidVaultLocation(location: Location, guild: Guild): VaultResult<Boolean> {
         val world = location.world ?: return VaultResult.Failure("Invalid world")
+        val frontier = configService.loadConfig().frontier
+        if (frontier.enabled && (world.name != frontier.worldName || world.environment != org.bukkit.World.Environment.NORMAL))
+            return VaultResult.Failure("Guild vaults belong in the Frontier overworld.")
 
         // Check if location is in loaded chunk
         if (!world.isChunkLoaded(location.blockX shr 4, location.blockZ shr 4)) {
@@ -313,7 +329,9 @@ class GuildVaultServiceBukkit(
             }
         }
 
-        if (claim.teamId != guild.id) {
+        val frontierStaging = config.frontier.enabled && claim.teamId == null &&
+            memberRepository.getByPlayerAndGuild(claim.playerId, guild.id) != null
+        if (claim.teamId != guild.id && !frontierStaging) {
             logger.debug(
                 "Vault placement rejected - claim owned by ${claim.teamId}, guild is ${guild.id}"
             )
@@ -333,12 +351,12 @@ class GuildVaultServiceBukkit(
         // Check cache first
         val guildId = vaultLocationCache[locationKey(location)]
         if (guildId != null) {
-            return guildRepository.getById(guildId)
+            return guildRepository.getById(guildId)?.takeIf { it.vaultStatus == VaultStatus.AVAILABLE }
         }
 
         // Search all guilds (slow, should be rare)
         for (guild in guildRepository.getAll()) {
-            if (guild.vaultChestLocation != null) {
+            if (guild.vaultChestLocation != null && guild.vaultStatus == VaultStatus.AVAILABLE) {
                 val vaultLoc = guild.vaultChestLocation
                 if (vaultLoc.worldId == location.world?.uid &&
                     vaultLoc.x == location.blockX &&

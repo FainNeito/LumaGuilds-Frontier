@@ -16,7 +16,8 @@ class IsPlayerActionAllowed(private val playerAccessRepository: PlayerAccessRepo
                             private val claimPermissionRepository: ClaimPermissionRepository,
                             private val getClaimAtPosition: GetClaimAtPosition,
                             private val playerStateRepository: PlayerStateRepository,
-                            private val guildRolePermissionResolver: GuildRolePermissionResolver) {
+                            private val guildRolePermissionResolver: GuildRolePermissionResolver,
+                            private val config: net.lumalyte.lg.config.MainConfig = net.lumalyte.lg.config.MainConfig()) {
     fun execute(playerId: UUID, worldId: UUID, position: Position2D,
                 playerActionType: PlayerActionType): IsPlayerActionAllowedResult {
         // Get the claim at the current position
@@ -24,6 +25,10 @@ class IsPlayerActionAllowed(private val playerAccessRepository: PlayerAccessRepo
             GetClaimAtPositionResult.NoClaimFound -> return IsPlayerActionAllowedResult.NoClaimFound
             GetClaimAtPositionResult.StorageError -> return IsPlayerActionAllowedResult.StorageError
             is GetClaimAtPositionResult.Success -> result.claim
+        }
+
+        if (config.frontier.allows(playerActionType, java.time.Instant.now())) {
+            return IsPlayerActionAllowedResult.Allowed(claim)
         }
 
         // Always allow if player owns the claim or has override

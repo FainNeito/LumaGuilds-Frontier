@@ -69,12 +69,12 @@ class PartitionRepositorySQLite(private val storage: Storage<Database>): Partiti
     }
 
     override fun add(partition: Partition): Boolean {
-        addToMemory(partition)
         try {
             val rowsAffected = storage.connection.executeUpdate("INSERT INTO claim_partitions (id, claim_id, " +
                     "lower_position_x, lower_position_z, upper_position_x, upper_position_z) VALUES (?,?,?,?,?,?);",
                 partition.id, partition.claimId, partition.area.lowerPosition2D.x, partition.area.lowerPosition2D.z,
                 partition.area.upperPosition2D.x, partition.area.upperPosition2D.z)
+            if (rowsAffected > 0) addToMemory(partition)
             return rowsAffected > 0
         } catch (error: SQLException) {
             throw DatabaseOperationException("Failed to add partition '${partition.id}' to the database. " +
@@ -83,13 +83,16 @@ class PartitionRepositorySQLite(private val storage: Storage<Database>): Partiti
     }
 
     override fun update(partition: Partition): Boolean {
-        removeFromMemory(partition)
-        addToMemory(partition)
+        val previous = getById(partition.id)
         try {
             val rowsAffected = storage.connection.executeUpdate("UPDATE claim_partitions SET claim_id=?, " +
                     "lower_position_x=?, lower_position_z=?, upper_position_x=?, upper_position_z=? WHERE id=?;",
                 partition.claimId, partition.area.lowerPosition2D.x, partition.area.lowerPosition2D.z,
                 partition.area.upperPosition2D.x, partition.area.upperPosition2D.z, partition.id)
+            if (rowsAffected > 0) {
+                previous?.let(::removeFromMemory)
+                addToMemory(partition)
+            }
             return rowsAffected > 0
         } catch (error: SQLException) {
             throw DatabaseOperationException("Failed to add update partition_id '${partition.id}' in the database. " +
@@ -99,10 +102,10 @@ class PartitionRepositorySQLite(private val storage: Storage<Database>): Partiti
 
     override fun remove(partitionId: UUID): Boolean {
         val partition = getById(partitionId) ?: return false
-        removeFromMemory(partition)
         try {
             val rowsAffected = storage.connection.executeUpdate("DELETE FROM claim_partitions WHERE id=?;",
                 partitionId)
+            if (rowsAffected > 0) removeFromMemory(partition)
             return rowsAffected > 0
         } catch (error: SQLException) {
             throw DatabaseOperationException("Failed to remove partition '${partitionId}' from the database. " +
@@ -112,12 +115,10 @@ class PartitionRepositorySQLite(private val storage: Storage<Database>): Partiti
 
     override fun removeByClaim(claimId: UUID): Boolean {
         val partitions = getByClaim(claimId)
-        for (partition in partitions) {
-            removeFromMemory(partition)
-        }
         try {
             val rowsAffected = storage.connection.executeUpdate("DELETE FROM claim_partitions WHERE claim_id=?;",
                 claimId)
+            partitions.forEach(::removeFromMemory)
             return rowsAffected > 0
         } catch (error: SQLException) {
             throw DatabaseOperationException("Failed to remove partitions for claim '${claimId}' from the database. " +

@@ -31,6 +31,10 @@ class WarBannerService(
         const val ACTIVE_DURATION_MILLIS: Long = 15L * 60L * 1000L
     }
 
+    var freePlacement: Boolean = false
+    var expiresNoLaterThan: (Long) -> Long = { Long.MAX_VALUE }
+    var mayRally: () -> Boolean = { true }
+
     @Synchronized
     fun place(
         transactionId: UUID,
@@ -59,7 +63,7 @@ class WarBannerService(
         } catch (_: ArithmeticException) {
             return WarBannerPlacementResult.ConfigurationError
         }
-        if (cost <= 0 || timing.first <= 0) return WarBannerPlacementResult.ConfigurationError
+        if ((!freePlacement && cost <= 0) || timing.first <= 0) return WarBannerPlacementResult.ConfigurationError
 
         val existing = repository.get(guildId)
         var priorState = existing
@@ -74,6 +78,25 @@ class WarBannerService(
             }
         }
 
+        if (freePlacement) {
+            val expiry = minOf(timing.second, expiresNoLaterThan(now))
+            if (expiry <= now) return WarBannerPlacementResult.NoActiveWar
+            val state = WarBannerState(guildId, UUID.randomUUID(), worldId, x, y, z,
+                playerId, transactionId, now, expiry, timing.third, true)
+            when (savePlacementWithRecovery(state)) {
+                PlacementWrite.NOT_SAVED -> return WarBannerPlacementResult.Failed(true)
+                PlacementWrite.UNKNOWN -> return WarBannerPlacementResult.Failed(false)
+                PlacementWrite.SAVED -> Unit
+            }
+            if (!runCatching { render(state) }.getOrDefault(false)) {
+                val restored = runCatching {
+                    if (priorState == null) repository.delete(guildId, state.bannerId)
+                    else repository.savePlacement(priorState)
+                }.getOrDefault(false)
+                return WarBannerPlacementResult.Failed(restored)
+            }
+            return WarBannerPlacementResult.Placed(state, 0)
+        }
         return when (val reservation = physicalGold.reserve(transactionId, playerId, cost)) {
             PhysicalReservationResult.Insufficient -> WarBannerPlacementResult.InsufficientGold
             PhysicalReservationResult.Unavailable -> WarBannerPlacementResult.PaymentUnavailable
@@ -186,7 +209,7 @@ class WarBannerService(
         repository.get(guildId)?.takeIf { it.isActiveAt(now) }
 
     fun activeForMember(playerId: UUID, guildId: UUID, now: Long): WarBannerState? {
-        if (!isMember(playerId, guildId)) return null
+        if (!mayRally() || !isMember(playerId, guildId)) return null
         return active(guildId, now)
     }
 

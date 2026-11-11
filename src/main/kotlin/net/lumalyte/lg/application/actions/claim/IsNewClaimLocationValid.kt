@@ -15,35 +15,36 @@ class IsNewClaimLocationValid(private val claimRepository: ClaimRepository,
                               private val partitionRepository: PartitionRepository,
                               private val worldManipulationService: WorldManipulationService,
                               private val config: MainConfig) {
-    fun execute(position: Position, worldId: UUID): IsNewClaimLocationValidResult {
+    fun execute(position: Position, worldId: UUID, playerId: UUID? = null, guildIds: Set<UUID> = emptySet()): IsNewClaimLocationValidResult {
+        if (config.frontier.enabled && worldManipulationService.isClaimWorld(worldId, config.frontier.worldName) == false)
+            return IsNewClaimLocationValidResult.TooCloseToWorldBorder
+        val padding = if (config.frontier.enabled) config.frontier.foreignClaimBufferChunks * 16 else config.distanceBetweenClaims
         // Create the area that is required for the partition
-        val initialClaimSize = config.initialClaimSize
-        val offsetMin = (initialClaimSize - 1) / 2
-        val offsetMax = initialClaimSize / 2
-        val area = Area(
-            Position2D(position.x - offsetMin, position.z - offsetMin),
-            Position2D(position.x + offsetMax, position.z + offsetMax)
-        )
+        val area = config.claimGeometry.initialArea(position, config.initialClaimSize)
+        if (!config.frontier.permitsLand(area)) return IsNewClaimLocationValidResult.TooCloseToWorldBorder
 
         // Get the partitions that exist in the occupied chunk space
-        val chunks = area.getChunks().flatMap { getSurroundingPositions(it, 1) }
+        val chunks = area.getChunks().flatMap { getSurroundingPositions(it, maxOf(1, (padding + 15) / 16)) }
         val partitions = chunks.flatMap { getByChunk(worldId, it) }.toSet()
 
 
         // Check if the area with the padded boundary overlaps
         val areaWithBoundary = Area(
-            Position2D( area.lowerPosition2D.x - config.distanceBetweenClaims,
-                area.lowerPosition2D.z - config.distanceBetweenClaims),
-            Position2D( area.upperPosition2D.x + config.distanceBetweenClaims,
-                area.upperPosition2D.z + config.distanceBetweenClaims))
+            Position2D( area.lowerPosition2D.x - padding,
+                area.lowerPosition2D.z - padding),
+            Position2D( area.upperPosition2D.x + padding,
+                area.upperPosition2D.z + padding))
         for (partition in partitions) {
-            if (partition.isAreaOverlap(areaWithBoundary)) {
+            val claim = claimRepository.getById(partition.claimId)
+            val related = config.frontier.enabled && claim != null &&
+                (if (claim.teamId != null) claim.teamId in guildIds else claim.playerId == playerId)
+            if (partition.isAreaOverlap(if (related) area else areaWithBoundary)) {
                 return IsNewClaimLocationValidResult.Overlap
             }
         }
 
         // Validate area is within world border
-        if (!worldManipulationService.isInsideWorldBorder(worldId, areaWithBoundary)) {
+        if (!worldManipulationService.isInsideWorldBorder(worldId, if (config.frontier.enabled) area else areaWithBoundary)) {
             return IsNewClaimLocationValidResult.TooCloseToWorldBorder
         }
 

@@ -12,6 +12,7 @@ import net.lumalyte.lg.domain.values.ExperienceSource
 class PermanentExperienceService(
     private val repository: ExperienceAwardRepository,
     private val activityService: PlaytimeActivityService,
+    private val enabledProvider: () -> Boolean = { true },
     private val boostProvider: () -> net.lumalyte.lg.domain.values.ExperienceBoost? = { null },
 ) {
     /** Reject invalid/source-ineligible requests before reserving caps or changing progression. */
@@ -46,6 +47,7 @@ class PermanentExperienceService(
 
     private fun sourceRejection(request: ExperienceAwardRequest, policy: ExperiencePolicy): AwardRejection? {
         return when {
+            !enabledProvider() -> AwardRejection.SOURCE_DISABLED
             request.source == ExperienceSource.SHOP_SALE -> AwardRejection.INELIGIBLE
             request.source != policy.source -> AwardRejection.POLICY_MISMATCH
             !policy.enabled -> AwardRejection.SOURCE_DISABLED

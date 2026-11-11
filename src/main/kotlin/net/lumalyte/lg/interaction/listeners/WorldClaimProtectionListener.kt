@@ -221,6 +221,10 @@ class WorldClaimProtectionListener: Listener, KoinComponent {
 
     @EventHandler
     fun onEntityExplodeEvent(event: EntityExplodeEvent) {
+        if (event.entity is org.bukkit.entity.TNTPrimed) {
+            val frontier = getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier
+            if (frontier.enabled && frontier.schedule.stateAt(java.time.Instant.now()).active) return
+        }
         if (event.entity is Creeper) return
         val action = WorldActionType.ENTITY_EXPLOSION_DESTROY_BLOCK
         val cancelledBlocks = fetchBlocksToCancel(event.blockList(), action)

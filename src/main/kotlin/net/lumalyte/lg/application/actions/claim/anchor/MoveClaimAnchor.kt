@@ -18,10 +18,19 @@ class MoveClaimAnchor(private val claimRepository: ClaimRepository,
                       private val getClaimAtPosition: GetClaimAtPosition,
                       private val doesPlayerHaveClaimOverride: DoesPlayerHaveClaimOverride,
                       private val claimManagementAuthorizer: ClaimManagementAuthorizer,
+                      private val frontierReplacement: net.lumalyte.lg.application.services.FrontierReplacementPolicy? = null,
+                      private val config: net.lumalyte.lg.config.MainConfig = net.lumalyte.lg.config.MainConfig(),
 ) {
     fun execute(claimId: UUID, playerId: UUID, newWorldId: UUID, newPosition: Position3D): MoveClaimAnchorResult {
+        if (config.frontier.enabled) return MoveClaimAnchorResult.NoPermission
         // Get the claim that is being moved
         val existingClaim = claimRepository.getById(claimId) ?: return MoveClaimAnchorResult.StorageError
+        if (frontierReplacement?.allows(existingClaim) == false) return MoveClaimAnchorResult.NoPermission
+
+        if (config.frontier.enabled && (newWorldId != existingClaim.worldId ||
+                worldManipulationService.isClaimWorld(newWorldId, config.frontier.worldName) == false ||
+                (getClaimAtPosition.execute(newWorldId, newPosition) as? GetClaimAtPositionResult.Success)?.claim?.id != claimId))
+            return MoveClaimAnchorResult.InvalidPosition
 
         // The destination may be empty or already inside this claim, but it may not
         // overlap another claim.

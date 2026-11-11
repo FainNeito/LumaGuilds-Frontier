@@ -34,7 +34,11 @@ open class ClaimCommand : BaseCommand(), KoinComponent {
     @CommandAlias("claim")
     @CommandPermission("lumaguilds.command.claim")
     @Syntax("claim")
-    fun onClaim(player: Player) {
+    fun onClaim(player: Player, @co.aikar.commands.annotation.Optional name: String? = null) {
+        if (getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) {
+            getKoin().get<net.lumalyte.lg.interaction.listeners.FrontierClaimExperience>().claimCommand(player, name.orEmpty())
+            return
+        }
         when (givePlayerClaimTool.execute(player.uniqueId)) {
             GivePlayerClaimToolResult.PlayerAlreadyHasTool -> player.sendMessage(lang.msg("command.claim.already_have_tool"))
             GivePlayerClaimToolResult.Success -> player.sendMessage(lang.msg("command.claim.success"))

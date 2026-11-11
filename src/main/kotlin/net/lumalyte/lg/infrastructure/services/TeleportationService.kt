@@ -115,7 +115,7 @@ class TeleportationService(
     ) {
         val playerId = player.uniqueId
         cancelTeleport(playerId)
-        if (CombatUtil.isInCombat(player)) {
+        if (CombatUtil.isEnabled() && CombatUtil.isInCombat(player)) {
             player.sendMessage(lang.msg("notification.teleport.in_combat"))
             return
         }

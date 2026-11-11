@@ -252,7 +252,15 @@ fun coreModule(plugin: LumaGuilds, storage: Storage<*>) = module {
     // Core services
     single<ConfigService> { ConfigServiceBukkit { get<LumaGuilds>().config } }
     single { get<ConfigService>().loadConfig() }
-    single<PlayerMetadataService> { PlayerMetadataServiceVault(get(), get()) }
+    single<PlayerMetadataService> {
+        val config = get<net.lumalyte.lg.config.MainConfig>()
+        if (config.frontier.enabled) object : PlayerMetadataService {
+            override fun getPlayerClaimLimit(playerId: java.util.UUID) = config.personalChunkLimit
+            override fun getPlayerClaimBlockLimit(playerId: java.util.UUID) = config.personalChunkLimit * 256
+            override suspend fun getPlayerClaimLimitAsync(playerId: java.util.UUID) = getPlayerClaimLimit(playerId)
+            override suspend fun getPlayerClaimBlockLimitAsync(playerId: java.util.UUID) = getPlayerClaimBlockLimit(playerId)
+        } else PlayerMetadataServiceVault(get(), config)
+    }
 
     // Utilities
     single<LangService> {
@@ -304,7 +312,32 @@ fun claimsModule() = module {
 
     // Claim actions
     singleOf(::CreateClaim)
-    single<ConvertClaimToGuild> { ConvertClaimToGuild(get(), get(), get()) }
+    single<net.lumalyte.lg.application.services.FrontierSiegeStore> {
+        net.lumalyte.lg.infrastructure.persistence.claims.FrontierSiegeStoreFiles(
+            get<org.bukkit.plugin.java.JavaPlugin>().dataFolder.toPath().resolve("frontier-sieges"))
+    }
+    single<net.lumalyte.lg.application.services.FrontierReplacementPolicy> {
+        net.lumalyte.lg.application.services.FrontierReplacementPolicy(get(), get())
+    }
+    single<net.lumalyte.lg.infrastructure.services.FrontierObjectives> {
+        net.lumalyte.lg.infrastructure.services.FrontierObjectives(get(), get(), get(), get(), get(), get(),
+            isGuildOwner = { playerId ->
+                val members = get<net.lumalyte.lg.application.persistence.MemberRepository>()
+                val ranks = get<net.lumalyte.lg.application.persistence.RankRepository>()
+                members.getGuildsByPlayer(playerId).any { guildId ->
+                    members.getByPlayerAndGuild(playerId,guildId)?.let { ranks.getById(it.rankId)?.priority == 0 } == true
+                }
+            }, vaults = { get() })
+    }
+    single<net.lumalyte.lg.application.services.FrontierReleaseJournal> {
+        net.lumalyte.lg.infrastructure.persistence.claims.FrontierReleaseJournalFiles(
+            get<org.bukkit.plugin.java.JavaPlugin>().dataFolder.toPath().resolve("frontier-releases"))
+    }
+    single<net.lumalyte.lg.application.services.FrontierClaimRelease> {
+        net.lumalyte.lg.application.services.FrontierClaimRelease(get(), get(), get(), get(), get(), get())
+    }
+    single<ConvertClaimToGuild> { ConvertClaimToGuild(get(), get(), get(), get(),
+        net.lumalyte.lg.application.services.ChunkClaimBudget(get(), get()), get(), get()) }
     singleOf(::GetClaimAtPosition)
     singleOf(::IsNewClaimLocationValid)
     singleOf(::IsPlayerActionAllowed)
@@ -469,7 +502,12 @@ fun guildsModule() = module {
                     .getOrNull<net.lumalyte.lg.application.services.GuildRolePermissionResolver>()
                     ?.invalidatePlayerCache(playerId)
             },
-        )
+        ).apply {
+            mayBecomeOwner = { playerId ->
+                !get<net.lumalyte.lg.config.MainConfig>().frontier.enabled ||
+                    get<net.lumalyte.lg.application.persistence.ClaimRepository>().getByPlayer(playerId).none { it.teamId == null }
+            }
+        }
     }
     single<RelationService> { RelationServiceBukkit(get(), get(), get()) }
     single<LfgService> { LfgServiceBukkit(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
@@ -797,9 +835,9 @@ fun progressionModule() = module {
     single<PlaytimeActivityService> { PlaytimeActivityServiceBukkit() }
     single {
         val config = get<ConfigService>()
-        net.lumalyte.lg.application.services.PermanentExperienceService(get(), get()) {
-            config.loadConfig().progression.xpBoost
-        }
+        net.lumalyte.lg.application.services.PermanentExperienceService(get(), get(),
+            boostProvider = { config.loadConfig().progression.xpBoost },
+            enabledProvider = { !config.loadConfig().frontier.enabled })
     }
     single {
         net.lumalyte.lg.application.services.ChapterTwoGuildAwardService(
@@ -1087,7 +1125,11 @@ fun economyModule() = module {
             physicalGold = get<net.lumalyte.lg.infrastructure.services.BukkitPhysicalGoldAdapter>(
                 named("WarBannerRawGold")
             ),
-            config = { config.loadConfig().warBanner },
+            config = {
+                val settings = config.loadConfig()
+                if (settings.frontier.enabled) settings.warBanner.copy(rawGoldCost = 0, cooldownMinutes = 1440)
+                else settings.warBanner
+            },
             isMember = { playerId, guildId ->
                 members.getByPlayerAndGuild(playerId, guildId) != null
             },
@@ -1097,18 +1139,30 @@ fun economyModule() = module {
                     ?.contains(net.lumalyte.lg.domain.entities.RankPermission.PLACE_WAR_BANNER) == true
             },
             hasActiveWar = { guildId ->
-                wars.getWarsForGuild(guildId).any { it.isActive }
+                val frontier = config.loadConfig().frontier
+                if (frontier.enabled) frontier.schedule.stateAt(java.time.Instant.now()).active
+                else wars.getWarsForGuild(guildId).any { it.isActive }
             },
-        )
+        ).apply {
+            freePlacement = config.loadConfig().frontier.enabled
+            if (freePlacement) {
+                expiresNoLaterThan = { now -> config.loadConfig().frontier.schedule
+                    .stateAt(java.time.Instant.ofEpochMilli(now)).nextTransition.toEpochMilli() }
+                mayRally = { config.loadConfig().frontier.schedule.stateAt(java.time.Instant.now()).active }
+            }
+        }
     }
     single {
         net.lumalyte.lg.infrastructure.services.WarBannerServiceBukkit(
             get<LumaGuilds>(), get(), get(), get(), get(),
-        )
+        ).apply {
+            mayTeleport = { player -> !get<net.lumalyte.lg.config.MainConfig>().frontier.enabled ||
+                !get<net.lumalyte.lg.interaction.listeners.FrontierHomes>().combatLocked(player) }
+        }
     }
     single {
         net.lumalyte.lg.infrastructure.listeners.WarBannerListener(
-            get(), get(), get(), get(),
+            get(), get(), get(), get(), get<net.lumalyte.lg.config.MainConfig>().frontier,
         )
     }
     single {
@@ -1206,7 +1260,8 @@ fun vaultModule() = module {
             get(),
             get(),
             getOrNull<GetClaimAtPosition>(),
-            get()
+            get(),
+            getOrNull<net.lumalyte.lg.application.services.FrontierReplacementPolicy>()
         )
     }
     single<net.lumalyte.lg.infrastructure.vault.VaultAutoSaveService> {
@@ -1265,7 +1320,11 @@ fun utilitiesModule() = module {
  */
 fun integrationModule(plugin: LumaGuilds) = module {
     // PlaceholderAPI
-    singleOf(::LumaGuildsExpansion)
+    // Referencing the expansion class loads its optional PlaceholderAPI superclass.
+    // Do not register it on the minimal Frontier server when the provider is absent.
+    if (plugin.server.pluginManager.getPlugin("PlaceholderAPI") != null) {
+        singleOf(::LumaGuildsExpansion)
+    }
 
     // Apollo Integration (Lunar Client)
     val apolloAvailable = try {

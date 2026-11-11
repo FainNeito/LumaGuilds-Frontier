@@ -1,4 +1,5 @@
 package net.lumalyte.lg.interaction.menus.management
+import net.lumalyte.lg.interaction.listeners.sendFrontierMessage
 
 import net.lumalyte.lg.utils.inventoryframework.addPane
 import net.badgersmc.nexus.i18n.LangService
@@ -68,7 +69,7 @@ class ClaimManagementMenu(private val menuNavigator: MenuNavigator, private val 
             guiEvent.isCancelled = true
             givePlayerClaimTool.execute(player.uniqueId)
         }
-        pane.addItem(guiClaimToolItem, 0, 0)
+        if (!getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) pane.addItem(guiClaimToolItem, 0, 0)
 
         // Add update icon menu button
         val iconEditorItem = ItemStack.of(Material.matchMaterial(claim.icon) ?: Material.GRASS_BLOCK)
@@ -77,7 +78,7 @@ class ClaimManagementMenu(private val menuNavigator: MenuNavigator, private val 
         val guiIconEditorItem = GuiItem(iconEditorItem) {
             if (claimManagementAuthorizer.hasPermission(playerId, claim, RankPermission.MANAGE_CLAIMS)) {
                 menuNavigator.openMenu(menuFactory.createClaimIconMenu(player, menuNavigator, claim))
-            } else player.sendMessage(lang.msg("command.common.no_claim_permission"))
+            } else player.sendFrontierMessage(lang.msg("command.common.no_claim_permission"))
         }
         pane.addItem(guiIconEditorItem, 2, 0)
 
@@ -88,7 +89,7 @@ class ClaimManagementMenu(private val menuNavigator: MenuNavigator, private val 
         val guiRenamingItem = GuiItem(renamingItem) {
             if (claimManagementAuthorizer.hasPermission(playerId, claim, RankPermission.MANAGE_CLAIMS)) {
                 menuNavigator.openMenu(ClaimRenamingMenu(menuNavigator, player, claim))
-            } else player.sendMessage(lang.msg("command.common.no_claim_permission"))
+            } else player.sendFrontierMessage(lang.msg("command.common.no_claim_permission"))
         }
         pane.addItem(guiRenamingItem, 3, 0)
 
@@ -99,12 +100,12 @@ class ClaimManagementMenu(private val menuNavigator: MenuNavigator, private val 
         val guiPlayerTrustItem = GuiItem(playerTrustItem) {
             if (claimManagementAuthorizer.hasPermission(playerId, claim, RankPermission.MANAGE_PERMISSIONS)) {
                 menuNavigator.openMenu(menuFactory.createClaimTrustMenu(menuNavigator, player, claim))
-            } else player.sendMessage(lang.msg("command.common.no_claim_permission"))
+            } else player.sendFrontierMessage(lang.msg("command.common.no_claim_permission"))
         }
         pane.addItem(guiPlayerTrustItem, 5, 0)
 
         // Add a convert to guild claim button (only for personal claims)
-        if (claim.teamId == null) {
+        if (claim.teamId == null && !getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) {
             val convertGuildItem = ItemStack.of(Material.WHITE_BANNER)
                 .name(lang.gui("menu.management.item.convert_guild.name"))
                 .lore(lang.gui("menu.management.item.convert_guild.lore"))
@@ -114,29 +115,39 @@ class ClaimManagementMenu(private val menuNavigator: MenuNavigator, private val 
                 val result = convertClaimToGuild.execute(claim.id, playerId)
                 when (result) {
                     is ConvertClaimToGuildResult.Success -> {
-                        player.sendMessage(Component.text("Claim successfully converted to guild claim!")
+                        player.sendFrontierMessage(Component.text("Claim successfully converted to guild claim!")
                             .color(TextColor.color(85, 255, 85)))
-                        player.sendMessage(Component.text("Guild members now have access based on their roles.")
+                        player.sendFrontierMessage(Component.text("Guild members now have access based on their roles.")
                             .color(TextColor.color(255, 255, 85)))
                     }
                     is ConvertClaimToGuildResult.ClaimNotFound -> {
-                        player.sendMessage(Component.text("Claim not found.")
+                        player.sendFrontierMessage(Component.text("Claim not found.")
                             .color(TextColor.color(255, 85, 85)))
                     }
                     is ConvertClaimToGuildResult.NotClaimOwner -> {
-                        player.sendMessage(Component.text("You are not the owner of this claim.")
+                        player.sendFrontierMessage(Component.text("You are not the owner of this claim.")
                             .color(TextColor.color(255, 85, 85)))
                     }
                     is ConvertClaimToGuildResult.AlreadyGuildOwned -> {
-                        player.sendMessage(Component.text("This claim is already a guild claim.")
+                        player.sendFrontierMessage(Component.text("This claim is already a guild claim.")
                             .color(TextColor.color(255, 85, 85)))
                     }
+                    is ConvertClaimToGuildResult.LimitExceeded -> {
+                        player.sendFrontierMessage(Component.text("Your guild does not have enough remaining claim chunks.")
+                            .color(TextColor.color(255, 85, 85)))
+                    }
+                    is ConvertClaimToGuildResult.RaidLocked -> {
+                        player.sendFrontierMessage(Component.text("Claim conversion is locked by a raid or its cooldown."))
+                    }
+                    is ConvertClaimToGuildResult.VaultRequired -> {
+                        player.sendFrontierMessage(Component.text("Place your guild vault in this personal claim first, then convert this claim."))
+                    }
                     is ConvertClaimToGuildResult.PlayerNotInGuild -> {
-                        player.sendMessage(Component.text("You must be in a guild to convert a claim.")
+                        player.sendFrontierMessage(Component.text("You must be in a guild to convert a claim.")
                             .color(TextColor.color(255, 85, 85)))
                     }
                     else -> {
-                        player.sendMessage(Component.text("An error occurred while converting the claim.")
+                        player.sendFrontierMessage(Component.text("An error occurred while converting the claim.")
                             .color(TextColor.color(255, 85, 85)))
                     }
                 }
@@ -161,7 +172,7 @@ class ClaimManagementMenu(private val menuNavigator: MenuNavigator, private val 
         val guiClaimFlagsItem = GuiItem(claimFlagsItem) {
             if (claimManagementAuthorizer.hasPermission(playerId, claim, RankPermission.MANAGE_FLAGS)) {
                 menuNavigator.openMenu(menuFactory.createClaimFlagMenu(menuNavigator, player, claim))
-            } else player.sendMessage(lang.msg("command.common.no_claim_permission"))
+            } else player.sendFrontierMessage(lang.msg("command.common.no_claim_permission"))
         }
         pane.addItem(guiClaimFlagsItem, 7, 0)
 
@@ -173,9 +184,9 @@ class ClaimManagementMenu(private val menuNavigator: MenuNavigator, private val 
             guiEvent.isCancelled = true
             if (claimManagementAuthorizer.hasPermission(playerId, claim, RankPermission.MANAGE_CLAIMS)) {
                 givePlayerMoveTool.execute(player.uniqueId, claim.id)
-            } else player.sendMessage(lang.msg("command.common.no_claim_permission"))
+            } else player.sendFrontierMessage(lang.msg("command.common.no_claim_permission"))
         }
-        pane.addItem(guiDeleteItem, 8, 0)
+        if (!getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) pane.addItem(guiDeleteItem, 8, 0)
 
         // Register the player being in the menu and open it
         registerClaimMenuOpening.execute(player.uniqueId, claim.id)

@@ -20,7 +20,8 @@ class VaultInventoryHolder(
     val guildId: UUID,
     val guildName: String,
     private val vaultInventoryManager: VaultInventoryManager,
-    private val capacity: Int = 54
+    private val capacity: Int = 54,
+    private val goldCurrencyEnabled: Boolean = true
 ) : InventoryHolder {
 
     /**
@@ -76,13 +77,13 @@ class VaultInventoryHolder(
 
         // Load gold balance and create button for slot 0
         val goldBalance = vaultInventoryManager.getGoldBalance(guildId)
-        val goldButton = GoldBalanceButton.createItem(goldBalance)
-        inv.setItem(0, goldButton)
+        val goldButton = if (goldCurrencyEnabled) GoldBalanceButton.createItem(goldBalance) else null
+        if (goldCurrencyEnabled) inv.setItem(0, goldButton)
 
         // Load all regular slots (1-53)
         val slots = vaultInventoryManager.getAllSlots(guildId)
         slots.forEach { (slot, item) ->
-            if (slot > 0 && slot < capacity) {
+            if (slot in (if (goldCurrencyEnabled) 1 else 0) until capacity) {
                 inv.setItem(slot, item)
             }
         }
@@ -105,7 +106,7 @@ class VaultInventoryHolder(
      */
     fun syncToCache() {
         val inv = getInventory()
-        for (slot in 1 until capacity) {
+        for (slot in (if (goldCurrencyEnabled) 1 else 0) until capacity) {
             val item = inv.getItem(slot)
             vaultInventoryManager.updateSlot(guildId, slot, item)
         }
@@ -116,8 +117,9 @@ class VaultInventoryHolder(
      * Called when the gold balance changes.
      */
     fun updateGoldButton() {
+        if (!goldCurrencyEnabled) return
         val goldBalance = vaultInventoryManager.getGoldBalance(guildId)
-        val goldButton = GoldBalanceButton.createItem(goldBalance)
+        val goldButton = if (goldCurrencyEnabled) GoldBalanceButton.createItem(goldBalance) else null
         getInventory().setItem(0, goldButton)
     }
 
@@ -128,7 +130,7 @@ class VaultInventoryHolder(
      * @param item The new item (null to clear).
      */
     fun updateSlot(slot: Int, item: org.bukkit.inventory.ItemStack?) {
-        if (slot == 0) {
+        if (slot == 0 && goldCurrencyEnabled) {
             // Slot 0 is reserved for gold button, cannot be updated directly
             return
         }

@@ -1,0 +1,29 @@
+# Frontier-only channels. Guild recipients are enforced by LumaGuildsChannel.
+global:
+  default: true
+  visible-anywhere: true
+  formats:
+    chat: '&#EFE5D0{player} &#B5ACA0» &#EFE5D0{message}'
+staff:
+  visible-anywhere: true
+  commands: [staff]
+  formats:
+    chat: '&#C0261D[Staff] &#EFE5D0{player} &#B5ACA0» &#EFE5D0{message}'
+guild:
+  plugin: LumaGuilds
+  channel-type: GUILD
+  visible-anywhere: true
+  formats:
+    chat: '&#D6B56C[Guild] &#EFE5D0{player} &#B5ACA0» &#EFE5D0{message}'
+guild-ally:
+  plugin: LumaGuilds
+  channel-type: ALLY
+  visible-anywhere: true
+  formats:
+    chat: '&#C9926C[Ally] &#EFE5D0{player} &#B5ACA0» &#EFE5D0{message}'
+guild-modchat:
+  plugin: LumaGuilds
+  channel-type: MODCHAT
+  visible-anywhere: true
+  formats:
+    chat: '&#C0261D[Guild Staff] &#EFE5D0{player} &#B5ACA0» &#EFE5D0{message}'

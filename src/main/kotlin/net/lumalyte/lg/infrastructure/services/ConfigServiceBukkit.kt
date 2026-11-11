@@ -18,12 +18,45 @@ class ConfigServiceBukkit(private val configProvider: () -> FileConfiguration): 
     private val config: FileConfiguration get() = configProvider()
     private val logger = LoggerFactory.getLogger(ConfigServiceBukkit::class.java)
 
+    private fun loadFrontierConfig(): FrontierConfig {
+        if (!config.getBoolean("frontier.enabled", false)) return FrontierConfig()
+        require(config.getBoolean("claims_enabled", true)) { "Frontier requires claims_enabled" }
+        require(config.getString("claim_geometry", "BLOCKS").equals("CHUNKS", ignoreCase = true)) {
+            "Frontier requires CHUNKS geometry and an isolated database"
+        }
+        return FrontierConfig(true, net.lumalyte.lg.domain.values.FrontierRaidSchedule(
+            java.time.ZoneId.of(config.getString("frontier.raid.timezone", "UTC")!!),
+            java.time.LocalTime.parse(config.getString("frontier.raid.start", "20:00")!!),
+            java.time.Duration.ofMinutes(config.getLong("frontier.raid.duration_minutes", 60)),
+        ),
+            requiredHits = config.getInt("frontier.siege.required_hits", 20),
+            hitInterval = java.time.Duration.ofMillis(config.getLong("frontier.siege.hit_interval_millis", 2000)),
+            replacementCooldown = java.time.Duration.ofMinutes(config.getLong("frontier.siege.replacement_cooldown_minutes", 30)),
+            worldName = config.getString("frontier.world.name", "frontier")!!,
+            borderSize = config.getInt("frontier.world.border_size", 5000),
+            spawnMinRadius = config.getInt("frontier.world.spawn_min_radius", 80),
+            spawnMaxRadius = config.getInt("frontier.world.spawn_max_radius", 160),
+            reservedSpawnRadius = config.getInt("frontier.claims.reserved_spawn_radius", 0),
+            raidMiningSpeed = config.getDouble("frontier.siege.raid_mining_speed", 0.35),
+            tntVaultDamage = config.getInt("frontier.siege.tnt_vault_damage", 4),
+            claimTitles = config.getBoolean("frontier.claims.entry_titles", true),
+            foreignClaimBufferChunks = config.getInt("frontier.claims.buffer_chunks", 1),
+            endBorderSize = config.getInt("frontier.world.end_border_size", 512),
+        )
+    }
+
     override fun loadConfig(): MainConfig {
         return MainConfig(
             databaseType = config.getString("database_type", "sqlite") ?: "sqlite",
             mariadb = loadMariaDBConfig(),
             claimsEnabled = config.getBoolean("claims_enabled", true),
+            claimGeometry = ClaimGeometry.valueOf(
+                (config.getString("claim_geometry", "BLOCKS") ?: "BLOCKS").uppercase(Locale.ROOT)
+            ),
             partiesEnabled = config.getBoolean("parties_enabled", true),
+            frontier = loadFrontierConfig(),
+            personalChunkLimit = config.getInt("chunk_limits.personal", 4).also { require(it in 1..100000) },
+            guildChunkLimit = config.getInt("chunk_limits.guild", 16).also { require(it in 1..100000) },
             claimLimit = config.getInt("claim_limit"),
             claimBlockLimit = config.getInt("claim_block_limit"),
             initialClaimSize = config.getInt("initial_claim_size"),
@@ -59,7 +92,7 @@ class ConfigServiceBukkit(private val configProvider: () -> FileConfiguration): 
                 reminderMinutes = config.getInt("recruitment.reminder_minutes", 0),
             ),
             chapterTwoRewardsEnabled = config.getBoolean("progression.chapter_two_rewards_enabled", true),
-            chapterTwoGoldCostsEnabled = config.getBoolean("progression.chapter_two_gold_costs_enabled", false)
+            chapterTwoGoldCostsEnabled = !config.getBoolean("frontier.enabled", false) && config.getBoolean("progression.chapter_two_gold_costs_enabled", false)
         )
     }
 
@@ -252,6 +285,7 @@ class ConfigServiceBukkit(private val configProvider: () -> FileConfiguration): 
     private fun loadVaultConfig(): VaultConfig {
         return VaultConfig(
             bankMode = string("vault.bank_mode", "BOTH"),
+            goldCurrencyEnabled = !config.getBoolean("frontier.enabled", false),
             vaultChestEnabled = config.getBoolean("vault.vault_chest_enabled", true),
             breakWarningTimeoutSeconds = config.getInt("vault.break_warning_timeout_seconds", 5),
             dropItemsOnExplosion = config.getBoolean("vault.drop_items_on_explosion", true),
@@ -265,7 +299,7 @@ class ConfigServiceBukkit(private val configProvider: () -> FileConfiguration): 
             valuableItems = config.getStringList("vault.valuable_items").ifEmpty { VaultConfig().valuableItems },
             valuableItemsCheckEnchantments = config.getBoolean("vault.valuable_items_check_enchantments", true),
             valuableCustomModelDataItems = config.getStringList("vault.valuable_custom_model_data_items"),
-            usePhysicalCurrency = config.getBoolean("vault.use_physical_currency", false),
+            usePhysicalCurrency = !config.getBoolean("frontier.enabled", false) && config.getBoolean("vault.use_physical_currency", false),
             physicalCurrencyMaterial = string("vault.physical_currency_material", "RAW_GOLD"),
             physicalCurrencyItemValue = config.getInt("vault.physical_currency_item_value", 1),
             physicalCurrencyRequireVaultChest = config.getBoolean("vault.physical_currency_require_vault_chest", true),

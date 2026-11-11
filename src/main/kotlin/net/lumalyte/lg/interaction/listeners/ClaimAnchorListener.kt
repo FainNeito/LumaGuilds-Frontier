@@ -1,4 +1,5 @@
 package net.lumalyte.lg.interaction.listeners
+import net.lumalyte.lg.interaction.listeners.sendFrontierMessage
 
 import net.badgersmc.nexus.i18n.LangService
 
@@ -55,7 +56,7 @@ class ClaimAnchorListener(): Listener, KoinComponent {
             is GetClaimAnchorAtPositionResult.Success -> claim = claimResult.claim
             is GetClaimAnchorAtPositionResult.NoClaimAnchorFound -> {}
             is GetClaimAnchorAtPositionResult.StorageError -> {
-                event.player.sendMessage(lang.msg("general.error"))
+                event.player.sendFrontierMessage(lang.msg("general.error"))
                 return
             }
         }
@@ -67,7 +68,7 @@ class ClaimAnchorListener(): Listener, KoinComponent {
             when (transferResult) {
                 is DoesPlayerHaveTransferRequestResult.Success -> playerHasTransferRequest = transferResult.hasRequest
                 else -> {
-                    event.player.sendMessage(lang.msg("general.error"))
+                    event.player.sendFrontierMessage(lang.msg("general.error"))
                 }
             }
 
@@ -100,6 +101,7 @@ class ClaimAnchorListener(): Listener, KoinComponent {
             return
         }
 
+        if (getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) return
         // Open the menu
         event.isCancelled = true
         val menuNavigator = MenuNavigator(event.player)
@@ -108,6 +110,8 @@ class ClaimAnchorListener(): Listener, KoinComponent {
 
     @EventHandler
     fun onBellPlaced(event: BlockPlaceEvent) {
+        if (event.isCancelled) return
+        if (getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) return
         // Only handle bell placement
         if (event.block.type != Material.BELL) return
 
@@ -117,7 +121,7 @@ class ClaimAnchorListener(): Listener, KoinComponent {
 
         // Check if player has permission to create claims
         if (!player.hasPermission("bellclaims.action.bell")) {
-            player.sendMessage(Component.text("You don't have permission to create claims")
+            player.sendFrontierMessage(Component.text("You don't have permission to create claims")
                 .color(TextColor.color(255, 85, 85)))
             return
         }
@@ -127,12 +131,12 @@ class ClaimAnchorListener(): Listener, KoinComponent {
         when (existingClaimResult) {
             is GetClaimAnchorAtPositionResult.Success -> {
                 // There's already a claim here, let the player know
-                player.sendMessage(Component.text("There's already a claim at this location")
+                player.sendFrontierMessage(Component.text("There's already a claim at this location")
                     .color(TextColor.color(255, 85, 85)))
                 return
             }
             is GetClaimAnchorAtPositionResult.StorageError -> {
-                player.sendMessage(Component.text("An error occurred while checking for existing claims")
+                player.sendFrontierMessage(Component.text("An error occurred while checking for existing claims")
                     .color(TextColor.color(255, 85, 85)))
                 return
             }
@@ -144,25 +148,35 @@ class ClaimAnchorListener(): Listener, KoinComponent {
         // Create the claim automatically with a default name
         try {
             // Generate a default claim name
-            val defaultName = "${player.name}'s Claim"
+            val defaultName = if (getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled)
+                "${player.name} [${Math.floorDiv(blockLocation.blockX, 16)},${Math.floorDiv(blockLocation.blockZ, 16)}]"
+            else "${player.name}'s Claim"
             val createResult = createClaim.execute(playerId, defaultName, blockLocation.toPosition3D(), blockLocation.world.uid)
 
             when (createResult) {
+                is net.lumalyte.lg.application.results.claim.CreateClaimResult.InvalidLocation -> {
+                    event.isCancelled = true
+                    player.sendFrontierMessage(Component.text("This chunk overlaps another claim or is outside the claimable area."))
+                }
+                is net.lumalyte.lg.application.results.claim.CreateClaimResult.RaidLocked -> {
+                    event.isCancelled = true
+                    player.sendFrontierMessage(Component.text("Claim replacement is locked by a raid or its cooldown."))
+                }
                 is net.lumalyte.lg.application.results.claim.CreateClaimResult.Success -> {
                     val claim = createResult.claim
-                    player.sendMessage(Component.text("Claim '${claim.name}' created successfully!")
+                    player.sendFrontierMessage(Component.text("Claim '${claim.name}' created successfully!")
                         .color(TextColor.color(85, 255, 85)))
 
                     // Log the successful claim creation
                     println("[DEBUG] ClaimAnchorListener: Successfully created claim ${claim.id} for player ${player.name} at ${blockLocation.x}, ${blockLocation.y}, ${blockLocation.z}")
                 }
                 is net.lumalyte.lg.application.results.claim.CreateClaimResult.NameCannotBeBlank -> {
-                    player.sendMessage(Component.text("Claim name cannot be blank")
+                    player.sendFrontierMessage(Component.text("Claim name cannot be blank")
                         .color(TextColor.color(255, 85, 85)))
                     event.isCancelled = true
                 }
                 is net.lumalyte.lg.application.results.claim.CreateClaimResult.LimitExceeded -> {
-                    player.sendMessage(Component.text("You have reached your claim limit")
+                    player.sendFrontierMessage(Component.text("You have reached your claim limit")
                         .color(TextColor.color(255, 85, 85)))
                     event.isCancelled = true
                 }
@@ -178,17 +192,17 @@ class ClaimAnchorListener(): Listener, KoinComponent {
                     val retryResult = createClaim.execute(playerId, uniqueName, blockLocation.toPosition3D(), blockLocation.world.uid)
                     if (retryResult is net.lumalyte.lg.application.results.claim.CreateClaimResult.Success) {
                         val claim = retryResult.claim
-                        player.sendMessage(Component.text("Claim '${claim.name}' created successfully!")
+                        player.sendFrontierMessage(Component.text("Claim '${claim.name}' created successfully!")
                             .color(TextColor.color(85, 255, 85)))
                         println("[DEBUG] ClaimAnchorListener: Successfully created claim ${claim.id} with unique name")
                     } else {
-                        player.sendMessage(Component.text("Failed to create claim - name already exists")
+                        player.sendFrontierMessage(Component.text("Failed to create claim - name already exists")
                             .color(TextColor.color(255, 85, 85)))
                         event.isCancelled = true
                     }
                 }
                 is net.lumalyte.lg.application.results.claim.CreateClaimResult.TooCloseToWorldBorder -> {
-                    player.sendMessage(Component.text("Claim is too close to the world border")
+                    player.sendFrontierMessage(Component.text("Claim is too close to the world border")
                         .color(TextColor.color(255, 85, 85)))
                     event.isCancelled = true
                 }
@@ -197,7 +211,7 @@ class ClaimAnchorListener(): Listener, KoinComponent {
             // Event listener - catching all exceptions to prevent listener failure
             println("[ERROR] ClaimAnchorListener: Failed to create claim for player ${player.name}: ${e.message}")
             e.printStackTrace()
-            player.sendMessage(Component.text("An error occurred while creating your claim")
+            player.sendFrontierMessage(Component.text("An error occurred while creating your claim")
                 .color(TextColor.color(255, 85, 85)))
             event.isCancelled = true
         }

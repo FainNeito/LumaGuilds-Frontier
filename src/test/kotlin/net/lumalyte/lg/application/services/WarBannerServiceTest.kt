@@ -34,6 +34,41 @@ class WarBannerServiceTest {
     )
 
     @Test
+    fun `Frontier banner is free expires at raid end and retains daily cooldown after destruction`() {
+        val now = 1_000_000L
+        val service = subject(WarBannerConfig(rawGoldCost=0, cooldownMinutes=1440)).apply {
+            freePlacement = true
+            expiresNoLaterThan = { now + 60_000L }
+            mayRally = { activeWar }
+        }
+        val placed = assertIs<WarBannerPlacementResult.Placed>(place(service, now))
+        assertEquals(0, physical.reserveCount)
+        assertEquals(0, physical.commitCount)
+        assertEquals(0L, placed.cost)
+        assertEquals(now + 60_000L, placed.state.expiresAt)
+        assertEquals(now + 86_400_000L, placed.state.cooldownUntil)
+        assertNotNull(service.activeForMember(playerId, guildId, now))
+        activeWar = false
+        assertNull(service.activeForMember(playerId, guildId, now))
+        assertIs<WarBannerPlacementResult.NoActiveWar>(place(service, now))
+        activeWar = true
+        service.destroyAt(worldId, placed.state.x, placed.state.y, placed.state.z)
+        assertIs<WarBannerPlacementResult.Cooldown>(place(service, now + 60_001L))
+        assertIs<WarBannerPlacementResult.Cooldown>(place(service, now + 86_399_999L))
+        service.expiresNoLaterThan = { Long.MAX_VALUE }
+        assertIs<WarBannerPlacementResult.Placed>(place(service, now + 86_400_000L))
+    }
+
+    @Test
+    fun `free placement render failure restores prior state without gold access`() {
+        val service = subject(WarBannerConfig(rawGoldCost=0, cooldownMinutes=1440)).apply { freePlacement = true }
+        val result = service.place(UUID.randomUUID(), playerId, guildId, worldId, 1, 64, 1, 1_000L) { false }
+        assertTrue(assertIs<WarBannerPlacementResult.Failed>(result).compensated)
+        assertNull(repository.state)
+        assertEquals(0, physical.reserveCount)
+    }
+
+    @Test
     fun `successful placement charges exact raw gold and lasts fifteen minutes`() {
         val now = 1_000_000L
         val result = subject().place(

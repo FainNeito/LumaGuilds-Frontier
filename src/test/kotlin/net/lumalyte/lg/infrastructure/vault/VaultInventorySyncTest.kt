@@ -32,6 +32,7 @@ class VaultInventorySyncTest {
         vaultRepository = mockk(relaxed = true)
         transactionLogger = mockk(relaxed = true)
         vaultConfig = mockk(relaxed = true)
+        every { vaultConfig.goldCurrencyEnabled } returns true
 
         // Setup default repository behavior
         every { vaultRepository.getVaultInventory(any()) } returns emptyMap()

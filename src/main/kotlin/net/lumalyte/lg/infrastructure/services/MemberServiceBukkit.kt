@@ -32,6 +32,7 @@ class MemberServiceBukkit(
     private val invalidateClaimPermissionCache: (UUID) -> Unit = {},
 ) : MemberService {
 
+    var mayBecomeOwner: (UUID) -> Boolean = { true }
     private val logger = LoggerFactory.getLogger(MemberServiceBukkit::class.java)
 
     override fun getMemberLimit(guildId: UUID): Int {
@@ -63,6 +64,7 @@ class MemberServiceBukkit(
         
         // Check if rank exists and belongs to the guild
         val rank = rankRepository.getById(rankId) ?: return null
+        if (rank.priority == 0 && !mayBecomeOwner(playerId)) return null
         if (rank.guildId != guildId) {
             logger.warn("Rank $rankId doesn't belong to guild $guildId")
             return null
@@ -399,6 +401,7 @@ class MemberServiceBukkit(
     }
 
     override fun transferOwnership(guildId: UUID, currentOwnerId: UUID, newOwnerId: UUID): Boolean {
+        if (!mayBecomeOwner(newOwnerId)) return false
         // Verify current owner is actually the owner
         val currentOwner = memberRepository.getByPlayerAndGuild(currentOwnerId, guildId) ?: run {
             logger.warn("Current owner $currentOwnerId not found in guild $guildId")
@@ -459,6 +462,7 @@ class MemberServiceBukkit(
         memberRepository.previewOwnerRecovery(guildId, playerId)
 
     override fun recoverOwnership(preview: OwnerRecoveryPreview): OwnerRecoveryResult {
+        if (!mayBecomeOwner(preview.member.playerId)) return OwnerRecoveryResult.Rejected(net.lumalyte.lg.application.results.OwnerRecoveryRejection.STALE_PREVIEW)
         val result = memberRepository.recoverOwnership(preview)
         if (result is OwnerRecoveryResult.Recovered) {
             // Permission refresh is post-commit. A notification failure must not misreport a committed

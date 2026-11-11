@@ -49,6 +49,7 @@ class ClaimDestructionListener: Listener, KoinComponent {
 
     @EventHandler
     fun onClaimHubDestroy(event: BlockBreakEvent) {
+        if (getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) return
         if (event.block.blockData !is Bell) return
         val claim = when (
             val result = getClaimAnchorAtPosition.execute(event.block.location.toPosition3D(), event.block.world.uid)) {
@@ -237,6 +238,7 @@ class ClaimDestructionListener: Listener, KoinComponent {
     }
 
     fun explosionHandler(blocks: MutableList<Block>): List<Block> {
+        if (getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) return emptyList()
         val cancelledBlocks = mutableListOf<Block>()
         for (block in blocks) {
             when (getClaimAnchorAtPosition.execute(block.location.toPosition3D(), block.location.world.uid)) {

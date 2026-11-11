@@ -8,13 +8,21 @@ import java.util.UUID
 
 class CanPlayerReceiveTransferRequest(private val claimRepository: ClaimRepository,
                                       private val partitionRepository: PartitionRepository,
-                                      private val playerMetadataService: PlayerMetadataService) {
+                                      private val playerMetadataService: PlayerMetadataService,
+                                      private val config: net.lumalyte.lg.config.MainConfig = net.lumalyte.lg.config.MainConfig()) {
     fun execute(claimId: UUID, playerId: UUID): CanPlayerReceiveTransferRequestResult {
         val claim = claimRepository.getById(claimId) ?: return CanPlayerReceiveTransferRequestResult.ClaimNotFound
 
         // Check if the player already owns the claim
         if (claim.playerId == playerId) {
             return CanPlayerReceiveTransferRequestResult.PlayerOwnsClaim
+        }
+
+        if (config.claimGeometry == net.lumalyte.lg.config.ClaimGeometry.CHUNKS) {
+            val budget = net.lumalyte.lg.application.services.ChunkClaimBudget(claimRepository, partitionRepository)
+            return if (claim.teamId == null && !budget.canAdd(playerId, null, budget.size(claim), config.personalChunkLimit))
+                CanPlayerReceiveTransferRequestResult.BlockLimitExceeded
+            else CanPlayerReceiveTransferRequestResult.Success
         }
 
         // Check if the player has reached their claim limit

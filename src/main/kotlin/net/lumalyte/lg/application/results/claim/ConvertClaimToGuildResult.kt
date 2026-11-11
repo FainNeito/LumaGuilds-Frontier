@@ -4,6 +4,9 @@ package net.lumalyte.lg.application.results.claim
  * Sealed class representing the possible results of converting a personal claim to a guild claim.
  */
 sealed class ConvertClaimToGuildResult {
+    data object VaultRequired : ConvertClaimToGuildResult()
+    data object RaidLocked : ConvertClaimToGuildResult()
+    data object LimitExceeded : ConvertClaimToGuildResult()
     /**
      * The claim was successfully converted to a guild claim.
      */

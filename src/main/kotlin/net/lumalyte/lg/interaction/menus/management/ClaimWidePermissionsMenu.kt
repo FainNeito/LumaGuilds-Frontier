@@ -1,4 +1,5 @@
 package net.lumalyte.lg.interaction.menus.management
+import net.lumalyte.lg.interaction.listeners.sendFrontierMessage
 
 import net.lumalyte.lg.utils.inventoryframework.addPane
 import net.badgersmc.nexus.i18n.LangService
@@ -38,7 +39,7 @@ class ClaimWidePermissionsMenu(private val menuNavigator: MenuNavigator, private
 
     override fun open() {
         if (claim == null) {
-            player.sendMessage(lang.msg("menu.common.feedback.no_claim"))
+            player.sendFrontierMessage(lang.msg("menu.common.feedback.no_claim"))
             return
         }
 

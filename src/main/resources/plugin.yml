@@ -5,10 +5,35 @@ load: STARTUP
 main: net.lumalyte.lg.LumaGuilds
 # Advancements is discovered through Bukkit service lifecycle events; ordering it
 # before Guilds creates a cycle with KOTH (Guilds -> KOTH -> Advancements).
-softdepend: [Vault, PlaceholderAPI, LiteBans, EnthusiaStaff, EnthusiaPlaytime, Nexo, packetevents, DiscordSRV]
+softdepend: [TAB, Vault, PlaceholderAPI, LiteBans, EnthusiaStaff, EnthusiaPlaytime, Nexo, packetevents, DiscordSRV]
 depend: [RoseChat]
 
 commands:
+  unclaim:
+    description: Preview and confirm removal of a non-founding territory chunk
+  autoclaim:
+    description: Enable or disable walking claims after confirmation
+  home:
+    description: Teleport to your one Frontier personal claim home
+    aliases: [claimhome]
+  sethome:
+    description: Set your one Frontier personal home inside your claim
+  guildhome:
+    description: Teleport to your guild's shared Frontier home
+    aliases: [ghome]
+  setguildhome:
+    description: Set your guild's one shared Frontier home
+  claimconfirm:
+    description: Confirm your Frontier chunk preview
+  claimcancel:
+    description: Cancel your Frontier chunk preview
+  claimoutline:
+    description: Show nearby personal and guild claim borders
+  vaultpickup:
+    description: Pack your Founding Vault and surrender ALL territory claims
+  raidinfo:
+    description: Show Frontier raid timing and your primary solo anchor
+    usage: /raidinfo
   guild:
     description: Guild management commands
     usage: /guild <subcommand> [args]

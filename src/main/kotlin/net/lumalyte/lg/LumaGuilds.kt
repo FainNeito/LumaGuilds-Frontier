@@ -202,13 +202,29 @@ class LumaGuilds : JavaPlugin() {
         val vaultService = get().get<net.lumalyte.lg.application.services.GuildVaultService>()
         val hologramService = get().get<net.lumalyte.lg.infrastructure.services.VaultHologramService>()
 
-        // Restore physical chest blocks at saved locations
-        val restoredChests = vaultService.restoreAllVaultChests()
-
-        // Start hologram service and recreate all holograms
+        // STARTUP runs before worlds exist. Frontier must finish pending defeats
+        // before restoration so an interrupted raid cannot resurrect its objective.
         hologramService.start()
-        hologramService.recreateAllHolograms()
-
+        if (get().get<ConfigService>().loadConfig().frontier.enabled) {
+            var restored = false
+            server.scheduler.runTaskTimer(this, Runnable {
+                if (!restored) {
+                    try {
+                        get().get<net.lumalyte.lg.infrastructure.services.FrontierObjectives>().recover()
+                        get().get<net.lumalyte.lg.application.services.FrontierClaimRelease>().recover()
+                        vaultService.restoreAllVaultChests()
+                        get().get<net.lumalyte.lg.infrastructure.services.FrontierObjectives>().migrateFoundations()
+                        hologramService.recreateAllHolograms()
+                        restored = true
+                    } catch (failure: Exception) {
+                        logger.log(java.util.logging.Level.SEVERE, "Frontier vault restoration pending; retrying in 10 seconds", failure)
+                    }
+                }
+            }, 1L, 200L)
+        } else {
+            vaultService.restoreAllVaultChests()
+            hologramService.recreateAllHolograms()
+        }
         // Configure command completions (ACF handles this automatically)
         configureCommandCompletions()
 
@@ -940,6 +956,64 @@ class LumaGuilds : JavaPlugin() {
      * Registers claim-related listeners.
      */
     private fun registerClaimEvents() {
+        val frontierConfig = get().get<ConfigService>().loadConfig().frontier
+        net.lumalyte.lg.interaction.listeners.FrontierTheme.enabled = frontierConfig.enabled
+        if (frontierConfig.enabled) {
+            val rules = net.lumalyte.lg.interaction.listeners.FrontierServerRules(frontierConfig) { player ->
+                net.lumalyte.lg.interaction.menus.guild.FrontierGuildMenu.open(player, get().get<ConfigService>().loadConfig())
+            }
+            val homes = net.lumalyte.lg.interaction.listeners.FrontierHomes(
+                this, frontierConfig, get().get(), get().get(), get().get(), get().get())
+            get().declare(homes)
+            server.pluginManager.registerEvents(homes, this)
+            homes.start()
+            rules.homeAction = { player, set -> homes.command(player, true, set) }
+            server.pluginManager.registerEvents(rules, this)
+            server.worlds.forEach(rules::configure)
+            rules.start(this)
+            val objectives = get().get<net.lumalyte.lg.infrastructure.services.FrontierObjectives>()
+            val experience = net.lumalyte.lg.interaction.listeners.FrontierClaimExperience(
+                this, get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), objectives)
+            get().declare(experience)
+            server.pluginManager.registerEvents(experience, this)
+            experience.start()
+            getCommand("raidinfo")?.setExecutor { sender, _, _, _ ->
+                fun tell(text: String) = sender.sendMessage(net.lumalyte.lg.interaction.listeners.FrontierTheme.message("Raid", text))
+                val now = java.time.Instant.now()
+                val state = frontierConfig.schedule.stateAt(now)
+                tell("Raid ${if (state.active) "ACTIVE until" else "opens at"} ${state.nextTransition}; schedule zone ${frontierConfig.schedule.zone}.")
+                tell("Founding Vault: ${frontierConfig.requiredHits} damage points; TNT ${frontierConfig.tntVaultDamage} per exposed blast; raider mining ${(frontierConfig.raidMiningSpeed * 100).toInt()}%. Wither raiding disabled.")
+                if (sender is org.bukkit.entity.Player) {
+                    val claims = get().get<net.lumalyte.lg.application.persistence.ClaimRepository>()
+                    val personal = claims.getByPlayer(sender.uniqueId).filter { it.teamId == null }
+                    val anchor = personal.firstOrNull { objectives.primaryAnchor(it) }
+                    if (anchor != null) tell("Solo Founding Vault: ${anchor.position.x}, ${anchor.position.y}, ${anchor.position.z}. Destroying it releases all your personal claims.")
+                    else tell("Use /claim to preview a chunk, then /claimconfirm to establish your Founding Vault.")
+                    tell("Limits: ${frontierConfig.requiredHits} objective hits; personal ${get().get<net.lumalyte.lg.config.MainConfig>().personalChunkLimit} chunks; guild ${get().get<net.lumalyte.lg.config.MainConfig>().guildChunkLimit} chunks.")
+                }
+                true
+            }
+            // STARTUP plugins enable before worlds are loaded. Retry pending work on the
+            // server thread after startup; persisted records keep replacement locked.
+            server.scheduler.runTaskTimer(this, Runnable {
+                try {
+                    objectives.recover()
+                    get().get<net.lumalyte.lg.application.services.FrontierClaimRelease>().recover()
+                } catch (failure: Exception) {
+                    logger.log(java.util.logging.Level.SEVERE, "Frontier recovery pending; retrying in 10 seconds", failure)
+                }
+            }, 1L, 200L)
+            server.pluginManager.registerEvents(
+                net.lumalyte.lg.interaction.listeners.FrontierObjectiveListener(
+                    objectives, get().get(), get().get(), get().get(), this, get().get(), get().get()), this)
+            val raidMining = net.lumalyte.lg.interaction.listeners.FrontierRaidMining(this, frontierConfig, get().get(), get().get(), get().get())
+            server.pluginManager.registerEvents(raidMining, this)
+            raidMining.start()
+            val alerts = net.lumalyte.lg.interaction.listeners.FrontierAlertListener(
+                this, frontierConfig, get().get(), get().get())
+            server.pluginManager.registerEvents(alerts, this)
+            alerts.start()
+        }
         server.pluginManager.registerEvents(BlockLaunchListener(this), this)
         server.pluginManager.registerEvents(ClaimAnchorListener(), this)
         server.pluginManager.registerEvents(ClaimDestructionListener(), this)
@@ -1020,6 +1094,7 @@ class LumaGuilds : JavaPlugin() {
         val progressionEventListener = get().get<ProgressionEventListener>()
         server.pluginManager.registerEvents(progressionEventListener, this)
 
+        if (!get().get<ConfigService>().loadConfig().frontier.enabled) {
         val questProgressListener = get().get<net.lumalyte.lg.infrastructure.listeners.QuestProgressListener>()
         server.pluginManager.registerEvents(questProgressListener, this)
         try {
@@ -1029,6 +1104,7 @@ class LumaGuilds : JavaPlugin() {
             logColored("❌ Failed to start weekly quest coordinator: ${e.message}")
         }
 
+        }
         // Register guild channel creation listener (for creating default channels)
         val guildChannelCreationListener = get().get<net.lumalyte.lg.infrastructure.listeners.GuildChannelCreationListener>()
         server.pluginManager.registerEvents(guildChannelCreationListener, this)
@@ -1214,10 +1290,12 @@ class LumaGuilds : JavaPlugin() {
         }
 
         // Register NexoItemProvider listener — fires on NexoItemsLoadedEvent
-        net.lumalyte.lg.utils.NexoItemProvider.register(this)
+        if (server.pluginManager.getPlugin("Nexo") != null) {
+            net.lumalyte.lg.utils.NexoItemProvider.register(this)
+        }
 
         // Vanilla icons for Bedrock players and Vanilla-style guilds; plain titles for Bedrock
-        runCatching {
+        if (server.pluginManager.getPlugin("packetevents") != null) runCatching {
             net.lumalyte.lg.infrastructure.services.MenuIconAdapter(
                 this,
                 get().get<net.lumalyte.lg.application.services.PlatformDetectionService>(),

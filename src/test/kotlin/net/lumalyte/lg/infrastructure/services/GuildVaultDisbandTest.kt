@@ -15,7 +15,9 @@ import java.util.UUID
 import kotlin.test.*
 
 class GuildVaultDisbandTest {
-    @Test fun `prepared disband preserves items across cascade deletion without rewriting deleted guild`() {
+    @Test fun `prepared disband preserves items across cascade deletion without rewriting deleted guild`() = checkDisband(false)
+    @Test fun `frontier disband includes ordinary items in slot zero and has full capacity`() = checkDisband(true)
+    private fun checkDisband(frontier: Boolean) {
         val server = MockBukkit.mock()
         try {
             val plugin = MockBukkit.createMockPlugin()
@@ -33,8 +35,11 @@ class GuildVaultDisbandTest {
             every { manager.getOrLoadVault(guild.id) } returns cached
             every { vault.getVaultInventory(guild.id) } returns mapOf(0 to ItemStack(Material.DIAMOND, 3))
             every { vault.getGoldBalance(guild.id) } returns 0L
-            val service = GuildVaultServiceBukkit(plugin, guilds, vault, mockk(), mockk(), manager,
+            val config = mockk<net.lumalyte.lg.application.services.ConfigService>()
+            every { config.loadConfig() } returns net.lumalyte.lg.config.MainConfig(frontier = net.lumalyte.lg.config.FrontierConfig(enabled = frontier), vault = net.lumalyte.lg.config.VaultConfig(goldCurrencyEnabled = !frontier))
+            val service = GuildVaultServiceBukkit(plugin, guilds, vault, mockk(), config, manager,
                 mockk(relaxed = true), mockk(), null, mockk())
+            assertEquals(if (frontier) 54 else 9, service.getCapacityForLevel(1))
             val cleanup = service.prepareDisband(guild)
             assertEquals(Material.CHEST, block.type)
             verify(exactly = 0) { manager.markVaultAsBeingRemoved(any()); vault.clearVault(any()) }
@@ -42,7 +47,7 @@ class GuildVaultDisbandTest {
             every { vault.getVaultInventory(guild.id) } returns emptyMap()
             assertIs<VaultResult.Success<Guild>>(cleanup())
             assertEquals(Material.AIR, block.type)
-            assertEquals(3, world.getEntitiesByClass(Item::class.java).sumOf { it.itemStack.amount })
+            assertEquals(if (frontier) 4 else 3, world.getEntitiesByClass(Item::class.java).sumOf { it.itemStack.amount })
             verify(exactly = 0) { guilds.update(any()); manager.forceFlush(any()) }
             verifyOrder {
                 manager.markVaultAsBeingRemoved(guild.id)

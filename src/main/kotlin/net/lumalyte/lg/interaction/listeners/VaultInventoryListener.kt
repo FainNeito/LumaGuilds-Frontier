@@ -71,7 +71,7 @@ class VaultInventoryListener(
             event.isCancelled = true
             return false
         }
-        val required = VaultItemPermissions.required(event.action, event.rawSlot, event.inventory.size)
+        val required = VaultItemPermissions.required(event.action, event.rawSlot, event.inventory.size, vaultConfig.goldCurrencyEnabled)
         val allowed = event.action != InventoryAction.UNKNOWN &&
             required.all { memberService.hasPermission(player.uniqueId, holder.guildId, it) }
         if (!allowed) {
@@ -155,8 +155,8 @@ class VaultInventoryListener(
     private fun handleVaultClick(event: InventoryClickEvent, holder: VaultInventoryHolder, player: Player) {
         if (!affectsVault(event)) return
         vaultInventoryManager.validateAndRepairVault(holder.guildId, holder.inventory)
-        if (protectBalanceButton(event, holder, player)) return
-        if (event.rawSlot == 0) {
+        if (vaultConfig.goldCurrencyEnabled && protectBalanceButton(event, holder, player)) return
+        if (vaultConfig.goldCurrencyEnabled && event.rawSlot == 0) {
             event.isCancelled = true
             handleGoldButtonClick(player, holder.guildId, holder.guildName, event.click, event.isShiftClick)
         } else {
@@ -309,7 +309,7 @@ class VaultInventoryListener(
     ) {
         // Check all non-gold-button slots for valuable items
         var hasValuableChanges = false
-        for (slot in 1 until inventory.size) {
+        for (slot in (if (vaultConfig.goldCurrencyEnabled) 1 else 0) until inventory.size) {
             val item = inventory.getItem(slot)
             if (item != null && isValuableItem(item)) {
                 hasValuableChanges = true

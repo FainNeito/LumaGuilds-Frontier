@@ -174,14 +174,14 @@ class WarBannerServiceBukkitTest {
             subject(core, teleports).teleport(player, guildId, 10L),
         )
         verify(exactly = 1) {
-            teleports.startTeleport(
+            teleports.startTeleportGuarded(
                 player,
                 match {
                     it.world?.uid == world.uid &&
                         it.blockX == block.x &&
                         it.blockY == block.y &&
                         it.blockZ == block.z
-                },
+                }, null, any(),
             )
         }
     }

@@ -32,7 +32,7 @@ class PlayerSessionListener : Listener, KoinComponent {
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val playerId = event.player.uniqueId
         warNotificationService.deliverUnread(playerId)
-        questCompletionNotifier.deliverUnread(playerId)
+        if (!getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) questCompletionNotifier.deliverUnread(playerId)
         guildLoginNotificationService.onPlayerJoin(playerId)
         questAvailabilityNotifier.onJoin(event.player)
     }

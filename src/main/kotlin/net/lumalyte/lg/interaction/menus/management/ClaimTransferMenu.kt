@@ -1,4 +1,5 @@
 package net.lumalyte.lg.interaction.menus.management
+import net.lumalyte.lg.interaction.listeners.sendFrontierMessage
 
 import net.badgersmc.nexus.i18n.LangService
 import net.lumalyte.lg.infrastructure.i18n.guiTitle
@@ -20,7 +21,7 @@ class ClaimTransferMenu(private val menuNavigator: MenuNavigator, private val cl
 
     override fun open() {
         if (claim == null) {
-            player.sendMessage(lang.msg("menu.common.feedback.no_claim"))
+            player.sendFrontierMessage(lang.msg("menu.common.feedback.no_claim"))
             return
         }
 

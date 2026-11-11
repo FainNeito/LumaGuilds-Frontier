@@ -14,7 +14,9 @@ class CreatePartition(private val claimRepository: ClaimRepository,
                       private val partitionRepository: PartitionRepository,
                       private val playerMetadataService: PlayerMetadataService,
                       private val config: MainConfig) {
-    suspend fun execute(claimId: UUID, area: Area): CreatePartitionResult {
+    suspend fun execute(claimId: UUID, selection: Area): CreatePartitionResult {
+        val area = config.claimGeometry.normalize(selection)
+        if (!config.frontier.permitsLand(area)) return CreatePartitionResult.StorageError
         val partition = Partition(claimId, area)
 
         // Check if selection overlaps an existing claim
@@ -30,8 +32,13 @@ class CreatePartition(private val claimRepository: ClaimRepository,
 
         // Check if the player has reached their claim block limit
         val claim = claimRepository.getById(claimId) ?: return CreatePartitionResult.StorageError
-        val playerBlockLimit = playerMetadataService.getPlayerClaimBlockLimitAsync(claim.playerId)
-        val playerBlockCount = claimRepository.getByPlayer(claim.playerId).flatMap { playerClaim ->
+        val chunkMode = config.claimGeometry == net.lumalyte.lg.config.ClaimGeometry.CHUNKS
+        val playerBlockLimit = if (chunkMode) (if (claim.teamId == null) config.personalChunkLimit else config.guildChunkLimit) * 256
+            else playerMetadataService.getPlayerClaimBlockLimitAsync(claim.playerId)
+        val pool = if (!chunkMode) claimRepository.getByPlayer(claim.playerId)
+            else claim.teamId?.let { claimRepository.getByTeam(it) }
+                ?: claimRepository.getByPlayer(claim.playerId).filter { it.teamId == null }
+        val playerBlockCount = pool.flatMap { playerClaim ->
             partitionRepository.getByClaim(playerClaim.id)
         }.sumOf { partition ->
             partition.getBlockCount()
@@ -57,15 +64,16 @@ class CreatePartition(private val claimRepository: ClaimRepository,
 
     private fun isPartitionTooClose(partition: Partition): Boolean {
         val claim = claimRepository.getById(partition.claimId)?: return true
-        val chunks = partition.area.getChunks().flatMap { getSurroundingPositions(it, 1) }
+        val padding = if (config.frontier.enabled) config.frontier.foreignClaimBufferChunks * 16 else config.distanceBetweenClaims
+        val chunks = partition.area.getChunks().flatMap { getSurroundingPositions(it, maxOf(1, (padding + 15) / 16)) }
         val partitions = chunks.flatMap { filterByWorld(claim.worldId, getByChunk(claim.worldId, it)) }.toMutableList()
         partitions.removeAll { it.claimId == partition.claimId }
         val areaWithBoundary = Area(
-            Position2D( partition.area.lowerPosition2D.x - config.distanceBetweenClaims,
-                partition.area.lowerPosition2D.z - config.distanceBetweenClaims),
-            Position2D( partition.area.upperPosition2D.x + config.distanceBetweenClaims,
-                partition.area.upperPosition2D.z + config.distanceBetweenClaims))
-        return partitions.any { it.isAreaOverlap(areaWithBoundary) }
+            Position2D( partition.area.lowerPosition2D.x - padding,
+                partition.area.lowerPosition2D.z - padding),
+            Position2D( partition.area.upperPosition2D.x + padding,
+                partition.area.upperPosition2D.z + padding))
+        return partitions.any { val other = claimRepository.getById(it.claimId); val sameOwner = other != null && (if (claim.teamId != null) other.teamId == claim.teamId else other.teamId == null && other.playerId == claim.playerId); !(config.frontier.enabled && sameOwner) && it.isAreaOverlap(areaWithBoundary) }
     }
 
     private fun getSurroundingPositions(position: Position2D, radius: Int): List<Position2D> {

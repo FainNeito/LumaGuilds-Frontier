@@ -51,7 +51,7 @@ class ProgressionConfigService(private val plugin: Plugin) {
     private fun loadQuests(): QuestSystemConfig {
         val base = "quests"
         return QuestSystemConfig(
-            enabled = yamlConfig.getBoolean("$base.enabled", true),
+            enabled = !plugin.config.getBoolean("frontier.enabled", false) && yamlConfig.getBoolean("$base.enabled", true),
             resetDay = loadDayOfWeek(yamlConfig.getString("$base.reset_day") ?: "MONDAY"),
             resetHourUtc = yamlConfig.getInt("$base.reset_hour_utc", 0).coerceIn(0, 23),
             questCount = yamlConfig.getInt("$base.quest_count", 6).coerceAtLeast(1),

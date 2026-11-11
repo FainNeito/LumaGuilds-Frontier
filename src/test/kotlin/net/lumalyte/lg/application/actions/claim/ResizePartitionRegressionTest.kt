@@ -79,7 +79,7 @@ class ResizePartitionRegressionTest {
         val claims = mockk<ClaimRepository>()
         val partitions = mockk<PartitionRepository>()
         val metadata = mockk<PlayerMetadataService>()
-        val config = mockk<MainConfig>()
+        val config = MainConfig(minimumPartitionSize = 1, distanceBetweenClaims = 0)
 
         every { claims.getById(claim.id) } returns claim
         every { claims.getByPlayer(owner) } returns setOf(claim)
@@ -89,8 +89,6 @@ class ResizePartitionRegressionTest {
         every { partitions.getByChunk(any()) } returns emptySet()
         every { partitions.update(any()) } returns updateSucceeds
         coEvery { metadata.getPlayerClaimBlockLimitAsync(owner) } returns limit
-        every { config.minimumPartitionSize } returns 1
-        every { config.distanceBetweenClaims } returns 0
 
         return Fixture(
             ResizePartition(claims, partitions, metadata, config),

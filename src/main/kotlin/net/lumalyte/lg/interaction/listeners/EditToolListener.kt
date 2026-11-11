@@ -73,6 +73,7 @@ class EditToolListener: Listener, KoinComponent {
 
     @EventHandler
     fun onUseClaimTool(event: PlayerInteractEvent) {
+        if (getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) return
         if (event.action != Action.RIGHT_CLICK_BLOCK) return
         val item = event.item ?: return
         val clickedBlock = event.clickedBlock ?: return

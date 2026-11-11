@@ -133,6 +133,15 @@ class BedrockClaimManagementMenu(
             is ConvertClaimToGuildResult.PlayerNotInGuild -> {
                 player.sendMessage(lang.msg("bedrock.claim_management.feedback.not_in_guild"))
             }
+            is ConvertClaimToGuildResult.LimitExceeded -> {
+                player.sendMessage("Your guild does not have enough remaining claim chunks.")
+            }
+            is ConvertClaimToGuildResult.RaidLocked -> {
+                player.sendMessage("Claim conversion is locked by a raid or its cooldown.")
+            }
+            is ConvertClaimToGuildResult.VaultRequired -> {
+                player.sendMessage("Place your guild vault in this personal claim first, then convert this claim.")
+            }
             is ConvertClaimToGuildResult.StorageError -> {
                 player.sendMessage(lang.msg("bedrock.claim_management.feedback.storage_error"))
             }

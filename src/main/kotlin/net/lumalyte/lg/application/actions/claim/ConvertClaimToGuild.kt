@@ -10,7 +10,11 @@ import java.util.UUID
 class ConvertClaimToGuild(
     private val claimRepository: ClaimRepository,
     private val guildService: GuildService,
-    private val guildRolePermissionResolver: GuildRolePermissionResolver
+    private val guildRolePermissionResolver: GuildRolePermissionResolver,
+    private val config: net.lumalyte.lg.config.MainConfig = net.lumalyte.lg.config.MainConfig(),
+    private val chunkBudget: net.lumalyte.lg.application.services.ChunkClaimBudget? = null,
+    private val frontierReplacement: net.lumalyte.lg.application.services.FrontierReplacementPolicy? = null,
+    private val getClaimAtPosition: GetClaimAtPosition? = null,
 ) {
 
     /**
@@ -21,6 +25,7 @@ class ConvertClaimToGuild(
      * @return A ConvertClaimToGuildResult indicating the outcome.
      */
     fun execute(claimId: UUID, playerId: UUID): ConvertClaimToGuildResult {
+        if (config.frontier.enabled) return ConvertClaimToGuildResult.RaidLocked
         try {
             // Check if claim exists and get it
             val claim = claimRepository.getById(claimId)
@@ -39,6 +44,30 @@ class ConvertClaimToGuild(
             // Check if player is in a guild
             val guildId = guildService.getPlayerGuilds(playerId).firstOrNull()?.id
                 ?: return ConvertClaimToGuildResult.PlayerNotInGuild
+
+            if (frontierReplacement?.allows(claim) == false || frontierReplacement?.allows(
+                    net.lumalyte.lg.application.services.FrontierOwner(
+                        net.lumalyte.lg.application.services.FrontierOwnerType.GUILD, guildId)) == false)
+                return ConvertClaimToGuildResult.RaidLocked
+
+            if (config.frontier.enabled) {
+                val guild = guildService.getGuild(guildId) ?: return ConvertClaimToGuildResult.PlayerNotInGuild
+                val vault = guild.vaultChestLocation ?: return ConvertClaimToGuildResult.VaultRequired
+                if (guild.vaultStatus != net.lumalyte.lg.domain.entities.VaultStatus.AVAILABLE)
+                    return ConvertClaimToGuildResult.VaultRequired
+                val locationClaim = getClaimAtPosition?.execute(vault.worldId,
+                    net.lumalyte.lg.domain.values.Position3D(vault.x, vault.y, vault.z))
+                val vaultClaim = (locationClaim as? net.lumalyte.lg.application.results.claim.GetClaimAtPositionResult.Success)?.claim
+                if (vaultClaim == null || (vaultClaim.teamId != guildId && vaultClaim.id != claim.id))
+                    return ConvertClaimToGuildResult.VaultRequired
+            }
+
+            if (config.claimGeometry == net.lumalyte.lg.config.ClaimGeometry.CHUNKS) {
+                val budget = requireNotNull(chunkBudget)
+                if (!budget.canAdd(playerId, guildId, budget.size(claim), config.guildChunkLimit)) {
+                    return ConvertClaimToGuildResult.LimitExceeded
+                }
+            }
 
             // Convert claim to guild ownership
             val updatedClaim = claim.copy(teamId = guildId)

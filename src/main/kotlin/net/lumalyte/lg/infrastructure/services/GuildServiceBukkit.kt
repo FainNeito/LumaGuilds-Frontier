@@ -74,6 +74,11 @@ class GuildServiceBukkit(
     }
 
     override fun createGuild(name: String, ownerId: UUID, banner: String?): Guild? {
+        if (configService.loadConfig().frontier.enabled &&
+            getKoin().get<net.lumalyte.lg.application.persistence.ClaimRepository>().getByPlayer(ownerId).any { it.teamId == null }) {
+            Bukkit.getPlayer(ownerId)?.sendMessage(net.lumalyte.lg.interaction.listeners.FrontierTheme.message("Guild", "Pack your personal Founding Vault and surrender personal claims before becoming a guild owner."))
+            return null
+        }
         // Validate guild name
         if (!isGuildNameValid(name)) {
             logger.warn("Invalid guild name: $name")
@@ -139,6 +144,16 @@ class GuildServiceBukkit(
 
     override fun disbandGuild(guildId: UUID, actorId: UUID): Boolean {
         val guild = guildRepository.getById(guildId) ?: return false
+        if (configService.loadConfig().frontier.enabled &&
+            getKoin().get<net.lumalyte.lg.application.persistence.ClaimRepository>().getByTeam(guildId).isNotEmpty()) {
+            Bukkit.getPlayer(actorId)?.sendMessage(net.lumalyte.lg.interaction.listeners.FrontierTheme.message(
+                "Founding Vault", "Pack your vault with /vaultpickup and confirm surrendering ALL claims before disbanding.", true))
+            return false
+        }
+        if (configService.loadConfig().frontier.enabled &&
+            !getKoin().get<net.lumalyte.lg.application.services.FrontierReplacementPolicy>().allows(
+                net.lumalyte.lg.application.services.FrontierOwner(
+                    net.lumalyte.lg.application.services.FrontierOwnerType.GUILD, guildId))) return false
 
         // System UUID for admin/console operations
         val systemUuid = UUID.fromString("00000000-0000-0000-0000-000000000000")

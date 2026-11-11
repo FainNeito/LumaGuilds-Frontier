@@ -27,7 +27,7 @@ fun ItemStack.amount(amount: Int): ItemStack {
 fun ItemStack.name(name: String): ItemStack {
     val meta = itemMeta ?: Bukkit.getItemFactory().getItemMeta(type) ?: return this
     // Create component and explicitly disable italic formatting to override Minecraft's default italic lore
-    val component = Component.text(name).nonItalic()
+    val component = net.lumalyte.lg.interaction.listeners.FrontierTheme.present(Component.text(name)).nonItalic()
     meta.itemName(component)
     // Hide all item attributes and metadata in menus
     meta.addItemFlags(
@@ -45,7 +45,7 @@ fun ItemStack.name(name: String): ItemStack {
 
 fun ItemStack.name(name: Component): ItemStack {
     val meta = itemMeta ?: Bukkit.getItemFactory().getItemMeta(type) ?: return this
-    meta.itemName(name.nonItalic())
+    meta.itemName(net.lumalyte.lg.interaction.listeners.FrontierTheme.present(name).nonItalic())
     meta.addItemFlags(
         ItemFlag.HIDE_ATTRIBUTES,
         ItemFlag.HIDE_ENCHANTS,
@@ -66,7 +66,7 @@ fun ItemStack.lore(text: String): ItemStack {
         lore = ArrayList()
     }
     // Create component and explicitly disable italic formatting to override Minecraft's default italic lore
-    val component = text.c().nonItalic()
+    val component = net.lumalyte.lg.interaction.listeners.FrontierTheme.present(text.c()).nonItalic()
     lore.add(component)
     meta.lore(lore)
     itemMeta = meta
@@ -76,7 +76,7 @@ fun ItemStack.lore(text: String): ItemStack {
 fun ItemStack.lore(text: Component): ItemStack {
     val meta = itemMeta ?: Bukkit.getItemFactory().getItemMeta(type) ?: return this
     val lore = meta.lore()?.toMutableList() ?: mutableListOf()
-    lore += text.nonItalic()
+    lore += net.lumalyte.lg.interaction.listeners.FrontierTheme.present(text).nonItalic()
     meta.lore(lore)
     itemMeta = meta
     return this

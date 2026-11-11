@@ -58,6 +58,7 @@ class CombatAntiGriefListener : Listener, KoinComponent {
      * belongs to a guild currently in an active war.
      */
     private fun shouldBlockGriefing(player: Player, blocks: List<Block>): Boolean {
+        if (configService.loadConfig().frontier.enabled) return false
         if (blocks.isEmpty()) return false
         if (!configService.loadConfig().combat.antiGriefingEnabled) return false
 

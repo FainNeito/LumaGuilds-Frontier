@@ -59,6 +59,41 @@ mariadb:
 # When disabled, all claim-related commands and features are unavailable
 claims_enabled: true
 
+# BLOCKS keeps the SMP claim geometry. CHUNKS aligns new claims and edits to full 16x16 columns.
+# Existing claims are not migrated. Use CHUNKS only with a fresh, isolated server database.
+# This enables geometry only; the Frontier raid/vault rules are still under development.
+claim_geometry: BLOCKS
+frontier:
+  # Development mode: use only on a fresh isolated server. Restart after changes.
+  # Isolated testing profile; do not enable against an existing SMP database.
+  claims:
+    # Zero disables the square spawn reservation; world border still applies.
+    reserved_spawn_radius: 0
+    entry_titles: true
+    # Empty chunks required between unrelated claim owners.
+    buffer_chunks: 1
+  enabled: false
+  raid:
+    timezone: UTC
+    start: '20:00'
+    duration_minutes: 60
+  siege:
+    required_hits: 20
+    raid_mining_speed: 0.35
+    tnt_vault_damage: 4
+    hit_interval_millis: 2000
+    replacement_cooldown_minutes: 30
+  world:
+    name: frontier
+    border_size: 5000
+    end_border_size: 512
+    spawn_min_radius: 80
+    spawn_max_radius: 160
+chunk_limits:
+  # Provisional development limits; only used with CHUNKS geometry.
+  personal: 4
+  guild: 16
+
 # Enable or disable the guild party system (party chat, party-based claims)
 parties_enabled: true
 

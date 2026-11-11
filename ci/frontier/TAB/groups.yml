@@ -1,0 +1,6 @@
+_DEFAULT_:
+  tabprefix: "<#EFE5D0>"
+  tagprefix: ""
+  customtabname: "%player%"
+  tabsuffix: ""
+  tagsuffix: ""

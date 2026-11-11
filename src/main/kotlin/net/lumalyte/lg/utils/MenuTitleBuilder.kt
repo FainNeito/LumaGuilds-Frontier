@@ -46,6 +46,7 @@ object MenuTitleBuilder {
      * @return       Title string for the ChestGui constructor.
      */
     fun build(theme: GuiTheme = GuiTheme.DEFAULT, rows: Int, title: String = ""): String {
+        if (net.lumalyte.lg.interaction.listeners.FrontierTheme.enabled) return "§6" + title.replace("§f", "§6")
         val theme = theme.resolved()
         // Vanilla style: plain chest title. White text is meant for the dark themed backgrounds,
         // so it is reset to the default chest colour; other colours are kept.

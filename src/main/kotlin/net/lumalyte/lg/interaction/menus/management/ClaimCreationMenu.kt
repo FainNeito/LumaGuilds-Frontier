@@ -1,4 +1,5 @@
 package net.lumalyte.lg.interaction.menus.management
+import net.lumalyte.lg.interaction.listeners.sendFrontierMessage
 
 import net.lumalyte.lg.utils.inventoryframework.addPane
 import net.badgersmc.nexus.i18n.LangService
@@ -34,6 +35,11 @@ class ClaimCreationMenu(private val player: Player, private val menuNavigator: M
     private val menuFactory: net.lumalyte.lg.interaction.menus.MenuFactory by inject()
 
     override fun open() {
+        if (getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) {
+            player.closeInventory()
+            getKoin().get<net.lumalyte.lg.interaction.listeners.FrontierClaimExperience>().preview(player, location, true)
+            return
+        }
         val playerId = player.uniqueId
         val gui = ChestGui(1, lang.guiTitle("menu.creation.title"))
         val pane = StaticPane(0, 0, 9, 1)
@@ -90,9 +96,9 @@ class ClaimCreationMenu(private val player: Player, private val menuNavigator: M
                 return
             }
             IsNewClaimLocationValidResult.StorageError ->
-                player.sendMessage(lang.msg("general.error"))
+                player.sendFrontierMessage(lang.msg("general.error"))
             else ->
-                player.sendMessage(lang.msg("general.error"))
+                player.sendFrontierMessage(lang.msg("general.error"))
 
         }
     }

@@ -25,6 +25,10 @@ class RenameCommand : ClaimCommand(), KoinComponent {
     @Subcommand("rename")
     @CommandPermission("lumaguilds.command.claim.rename")
     fun onRename(player: Player, name: String) {
+        if (getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) {
+            getKoin().get<net.lumalyte.lg.interaction.listeners.FrontierClaimExperience>().claimCommand(player, "rename $name")
+            return
+        }
         // Gets the partition at the player's current location
         val partition = getPartitionAtPlayer(player) ?: return
         if (!isPlayerHasClaimPermission(player, partition, net.lumalyte.lg.domain.entities.RankPermission.MANAGE_CLAIMS)) return

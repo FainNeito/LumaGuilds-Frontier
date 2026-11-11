@@ -1,4 +1,5 @@
 package net.lumalyte.lg.infrastructure.listeners
+import net.lumalyte.lg.interaction.listeners.playFrontierSound
 
 import net.badgersmc.nexus.i18n.LangService
 import net.lumalyte.lg.application.services.ConfigService
@@ -199,8 +200,8 @@ class VaultProtectionListener : Listener, KoinComponent {
             player.sendMessage(lang.msg("notification.vault.placement.capacity", "slots" to vaultService.getPermanentCapacityForGuild(guild)))
 
                 // Play success sound
-                player.playSound(player.location, org.bukkit.Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.2f)
-                player.playSound(player.location, org.bukkit.Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.5f)
+                player.playFrontierSound(player.location, org.bukkit.Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.2f)
+                player.playFrontierSound(player.location, org.bukkit.Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.5f)
 
                 logger.info("${player.name} placed guild vault for ${guild.name} at ${block.location}")
 
@@ -211,7 +212,7 @@ class VaultProtectionListener : Listener, KoinComponent {
                 event.isCancelled = true
             player.sendMessage(lang.msg("notification.vault.failed_header"))
             player.sendMessage(lang.msg("notification.vault.placement.failed", "reason" to placeResult.message))
-                player.playSound(player.location, org.bukkit.Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f)
+                player.playFrontierSound(player.location, org.bukkit.Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f)
                 logger.error("Failed to place vault for ${guild.name}: ${placeResult.message}")
             }
         }
@@ -247,13 +248,13 @@ class VaultProtectionListener : Listener, KoinComponent {
                 is net.lumalyte.lg.application.services.VaultResult.Success -> {
                     player.sendMessage(lang.msg("notification.vault.open.success_header"))
                     player.sendMessage(lang.msg("notification.vault.open.success", "guild" to guild.name))
-                    player.playSound(player.location, org.bukkit.Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f)
+                    player.playFrontierSound(player.location, org.bukkit.Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f)
                     logger.debug("Opened custom vault inventory for ${player.name} (guild: ${guild.name}, capacity: ${vaultService.getPermanentCapacityForGuild(guild)} slots)")
                 }
                 is net.lumalyte.lg.application.services.VaultResult.Failure -> {
                     player.sendMessage(lang.msg("notification.vault.failed_header"))
                     player.sendMessage(lang.msg("notification.vault.open.failed", "reason" to result.message))
-                    player.playSound(player.location, org.bukkit.Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f)
+                    player.playFrontierSound(player.location, org.bukkit.Sound.ENTITY_VILLAGER_NO, 1.0f, 0.8f)
                     logger.warn("Failed to open vault for ${player.name}: ${result.message}")
                 }
             }
@@ -273,6 +274,7 @@ class VaultProtectionListener : Listener, KoinComponent {
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onBlockBreak(event: BlockBreakEvent) {
+        if (getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) return
         val block = event.block
         val player = event.player
 
@@ -359,6 +361,7 @@ class VaultProtectionListener : Listener, KoinComponent {
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onEntityExplode(event: EntityExplodeEvent) {
+        if (getKoin().get<net.lumalyte.lg.config.MainConfig>().frontier.enabled) return
         val config = getConfig()
 
         // Check each block in the explosion

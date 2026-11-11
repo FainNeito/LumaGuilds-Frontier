@@ -1,4 +1,5 @@
 package net.lumalyte.lg.interaction.menus.management
+import net.lumalyte.lg.interaction.listeners.sendFrontierMessage
 
 import net.lumalyte.lg.utils.inventoryframework.addPane
 import net.badgersmc.nexus.i18n.LangService
@@ -67,8 +68,15 @@ class ClaimNamingMenu(private val player: Player, private val menuNavigator: Men
         val confirmGuiItem = GuiItem(confirmItem) { guiEvent ->
             val result = createClaim.execute(player.uniqueId, name, location.toPosition3D(), location.world.uid)
             when (result) {
+                is net.lumalyte.lg.application.results.claim.CreateClaimResult.InvalidLocation -> {
+                    player.sendFrontierMessage(net.kyori.adventure.text.Component.text("This chunk overlaps another claim or is outside the claimable area."))
+                }
+                is net.lumalyte.lg.application.results.claim.CreateClaimResult.RaidLocked -> {
+                    player.sendFrontierMessage(net.kyori.adventure.text.Component.text("Claim replacement is locked by a raid or its cooldown."))
+                }
                 is net.lumalyte.lg.application.results.claim.CreateClaimResult.Success -> {
-                    location.world.playSound(
+                    if (net.lumalyte.lg.interaction.listeners.FrontierTheme.enabled) net.lumalyte.lg.interaction.listeners.FrontierTheme.cue(player, net.lumalyte.lg.interaction.listeners.FrontierTheme.Cue.SUCCESS)
+                    else location.world.playSound(
                         player.location,
                         Sound.BLOCK_VAULT_OPEN_SHUTTER,
                         SoundCategory.BLOCKS,

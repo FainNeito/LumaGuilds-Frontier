@@ -39,6 +39,7 @@ class VaultInventoryManagerSharedInventoryTest {
         vaultRepository = mockk(relaxed = true)
         transactionLogger = mockk(relaxed = true)
         vaultConfig = mockk(relaxed = true)
+        every { vaultConfig.goldCurrencyEnabled } returns true
 
         // Mock Bukkit static methods
         mockkStatic(Bukkit::class)
@@ -399,5 +400,31 @@ class VaultInventoryManagerSharedInventoryTest {
         verify { reopened.setItem(53, contents.getValue(53)) }
         verify(exactly = 0) { vaultRepository.saveVaultItem(guildId, 24, null) }
         verify(exactly = 0) { vaultRepository.saveVaultItem(guildId, 53, null) }
+    }
+    @Test
+    fun `currency free vault preserves slot zero and last slot during forced raid closure`() {
+        every { vaultConfig.goldCurrencyEnabled } returns false
+        val id = UUID.randomUUID()
+        val inventory = mockk<Inventory>(relaxed = true)
+        every { inventory.size } returns 54
+        every { inventory.getItem(any()) } returns null
+        every { inventory.viewers } returns emptyList()
+        every { Bukkit.createInventory(any<InventoryHolder>(), any<Int>(), any<net.kyori.adventure.text.Component>()) } returns inventory
+        manager.getOrCreateSharedInventory(id, "Frontier", 54)
+        verify(exactly = 0) { GoldBalanceButton.createItem(any()) }
+        val first = mockk<ItemStack>(relaxed = true)
+        val last = mockk<ItemStack>(relaxed = true)
+        every { inventory.getItem(0) } returns first
+        every { inventory.getItem(53) } returns last
+        manager.markVaultAsBeingRemoved(id)
+        assertSame(first, manager.getSlot(id, 0))
+        assertSame(last, manager.getSlot(id, 53))
+        manager.refreshGoldDisplay(id)
+        manager.ensureGoldButtonPresent(id, inventory)
+        verify(exactly = 0) { inventory.setItem(0, any()) }
+        assertEquals(setOf(net.lumalyte.lg.domain.entities.RankPermission.WITHDRAW_FROM_VAULT),
+            net.lumalyte.lg.interaction.listeners.VaultItemPermissions.required(org.bukkit.event.inventory.InventoryAction.PICKUP_ALL, 0, 54, false))
+        assertEquals(setOf(net.lumalyte.lg.domain.entities.RankPermission.DEPOSIT_TO_VAULT),
+            net.lumalyte.lg.interaction.listeners.VaultItemPermissions.required(org.bukkit.event.inventory.InventoryAction.PLACE_ALL, 0, 54, false))
     }
 }

@@ -1,4 +1,5 @@
 package net.lumalyte.lg.interaction.menus.management
+import net.lumalyte.lg.interaction.listeners.sendFrontierMessage
 
 import net.lumalyte.lg.utils.inventoryframework.addPane
 import com.github.stefvanschie.inventoryframework.adventuresupport.ComponentHolder
@@ -38,7 +39,7 @@ class ClaimFlagMenu(private val menuNavigator: MenuNavigator, private val player
 
     override fun open() {
         if (claim == null) {
-            player.sendMessage(lang.msg("menu.common.feedback.no_claim"))
+            player.sendFrontierMessage(lang.msg("menu.common.feedback.no_claim"))
             return
         }
 

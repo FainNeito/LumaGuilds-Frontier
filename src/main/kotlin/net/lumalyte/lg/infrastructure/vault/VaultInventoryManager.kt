@@ -98,7 +98,8 @@ class VaultInventoryManager(
                 guildId = id,
                 guildName = guildName,
                 vaultInventoryManager = this,
-                capacity = permanentCapacity
+                capacity = permanentCapacity,
+                goldCurrencyEnabled = vaultConfig.goldCurrencyEnabled
             )
 
             val inventory = Bukkit.createInventory(
@@ -119,8 +120,8 @@ class VaultInventoryManager(
 
             // Ensure Gold Balance Button is in slot 0
             val goldBalance = getGoldBalance(guildId)
-            val goldButton = GoldBalanceButton.createItem(goldBalance)
-            inventory.setItem(0, goldButton)
+            val goldButton = if (vaultConfig.goldCurrencyEnabled) GoldBalanceButton.createItem(goldBalance) else null
+            if (vaultConfig.goldCurrencyEnabled) inventory.setItem(0, goldButton)
 
             logger.info("Created shared inventory for guild $guildName with ${vault.slots.size} items")
             inventory
@@ -169,7 +170,7 @@ class VaultInventoryManager(
         var changesDetected = 0
 
         // Iterate through all slots except slot 0 (Gold Balance Button)
-        for (slot in 1 until inventory.size) {
+        for (slot in (if (vaultConfig.goldCurrencyEnabled) 1 else 0) until inventory.size) {
             val inventoryItem = inventory.getItem(slot)
             val cachedItem = vault.getSlot(slot)
 
@@ -303,6 +304,7 @@ class VaultInventoryManager(
 
     /** Refresh is display-only; background callers leave UI work to the next server-thread read/open. */
     fun refreshGoldDisplay(guildId: UUID) {
+        if (!vaultConfig.goldCurrencyEnabled) return
         if (!Bukkit.isPrimaryThread()) return
         updateGoldBalanceButton(guildId, getGoldBalance(guildId))
     }
@@ -310,6 +312,7 @@ class VaultInventoryManager(
     fun getTopGoldBalances(limit: Int): List<Pair<UUID, Long>> =
         if (limit <= 0) emptyList() else vaultRepository.getTopGoldBalances(limit)
     private fun updateGoldBalanceButton(guildId: UUID, newBalance: Long) {
+        if (!vaultConfig.goldCurrencyEnabled) return
         // Get the shared inventory if it exists
         val sharedInventory = sharedInventories[guildId] ?: return
 
@@ -669,6 +672,8 @@ class VaultInventoryManager(
      * @param guildId The guild ID.
      */
     fun markVaultAsBeingRemoved(guildId: UUID) {
+        // Capture inventory changes before close handlers skip synchronization.
+        sharedInventories[guildId]?.let { syncInventoryToCache(guildId, it) }
         vaultsBeingRemoved.add(guildId)
         logger.info("Marked vault $guildId as being removed - close events will not sync inventory")
     }
@@ -796,6 +801,7 @@ class VaultInventoryManager(
      * @param inventory The Bukkit inventory to validate.
      */
     fun ensureGoldButtonPresent(guildId: UUID, inventory: Inventory) {
+        if (!vaultConfig.goldCurrencyEnabled) return
         val slot0 = inventory.getItem(0)
 
         if (!GoldBalanceButton.isGoldButton(slot0)) {

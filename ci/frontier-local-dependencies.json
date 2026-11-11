@@ -1,0 +1,28 @@
+{
+  "source": ".github/workflows/build.yml",
+  "purpose": "Local Frontier development compile dependencies; these are not server deployment artifacts.",
+  "artifacts": [
+    {
+      "path": "libs/RoseChat-RC-2.jar",
+      "repository": "Rosewood-Development/RoseChat",
+      "commit": "179483128fa2020f3ad8b0e4192ada3d0a251c49",
+      "task": "shadowJar with ci/rosechat/simpleclans.init.gradle",
+      "sha256": "D6F26F5489D4F182DB27980B92908F57BBBC8EADF78E7442E362FB83A7456565",
+      "note": "Built as RoseChat-RC-4.jar; copied to the filename expected by LumaGuilds CI."
+    },
+    {
+      "path": "libs/CombatLogX-api.jar",
+      "repository": "SirBlobman/CombatLogX",
+      "commit": "4812e85af1264ebb27da481b9d9cbf8de0956e53",
+      "task": ":api:jar",
+      "sha256": "8E37F4A543B68F74541E5E567C95B901110526CEC1BD6FEEE3726411CCF6D2F7"
+    },
+    {
+      "path": "libs/EnthusiaStaff-moderation-api.jar",
+      "repository": "wsg138/EnthusiaStaff",
+      "commit": "8539bb8c77d7ecaf083546dda7ca8ccbfa8064e6",
+      "task": ":moderation-platform-api:jar",
+      "sha256": "4C834ECECB860A88AAB7F9A757B9CE86301C24A8452D4C3C5B1F1653A28E51EA"
+    }
+  ]
+}

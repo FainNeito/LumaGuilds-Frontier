@@ -37,14 +37,14 @@ fun LangService.gui(
             else -> value
         }
     }.toTypedArray()
-    return GuiTextStyler.style(msg(key, *renderablePlaceholders), protectedText)
+    return GuiTextStyler.style(net.lumalyte.lg.interaction.listeners.FrontierTheme.present(msg(key, *renderablePlaceholders)), protectedText)
 }
 
 /** Compatibility output for InventoryFramework's legacy String-only title API. */
 fun LangService.guiTitle(
     key: String,
     vararg placeholders: Pair<String, Any?>,
-): String = LegacyComponentSerializer.legacySection().serialize(gui(key, *placeholders))
+): String = (if (net.lumalyte.lg.interaction.listeners.FrontierTheme.enabled) LegacyComponentSerializer.builder().character('§').hexColors().useUnusualXRepeatedCharacterHexFormat().build() else LegacyComponentSerializer.legacySection()).serialize(gui(key, *placeholders))
 
 /** Plain Unicode typography for Bedrock form APIs, which do not accept Adventure Components. */
 fun LangService.bedrock(

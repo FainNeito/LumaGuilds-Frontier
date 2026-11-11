@@ -182,8 +182,7 @@ class PeacefulModeEnforcementTest {
         claimsEnabled: Boolean,
         claimResult: GetClaimAtPositionResult,
     ): GuildVaultServiceBukkit {
-        val config = mockk<MainConfig>()
-        every { config.claimsEnabled } returns claimsEnabled
+        val config = MainConfig(claimsEnabled = claimsEnabled)
         every { configService.loadConfig() } returns config
 
         val getClaimAtPosition = mockk<GetClaimAtPosition>()

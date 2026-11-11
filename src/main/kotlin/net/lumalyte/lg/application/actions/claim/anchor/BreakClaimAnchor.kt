@@ -15,9 +15,12 @@ class BreakClaimAnchor(private val claimRepository: ClaimRepository,
                        private val flagRepository: ClaimFlagRepository,
                        private val claimPermissionRepository: ClaimPermissionRepository,
                        private val playerAccessRepository: PlayerAccessRepository,
-                       private val plugin: JavaPlugin) {
+                       private val plugin: JavaPlugin,
+                       private val config: net.lumalyte.lg.config.MainConfig = net.lumalyte.lg.config.MainConfig()) {
 
     fun execute(worldId: UUID, position: Position3D): BreakClaimAnchorResult {
+        // Frontier destruction must use its durable siege coordinator, including API callers.
+        if (config.frontier.enabled) return BreakClaimAnchorResult.StorageError
         val claim = claimRepository.getByPosition(position, worldId) ?: return BreakClaimAnchorResult.ClaimNotFound
 
         // Trigger the break reset countdown and decrement break count by 1

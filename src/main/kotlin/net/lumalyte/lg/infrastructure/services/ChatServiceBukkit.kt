@@ -1,4 +1,5 @@
 package net.lumalyte.lg.infrastructure.services
+import net.lumalyte.lg.interaction.listeners.playFrontierSound
 
 import net.lumalyte.lg.utils.RankNameContent
 
@@ -586,7 +587,7 @@ class ChatServiceBukkit(
                 player.sendMessage(message)
                 
                 if (soundNotification) {
-                    player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_BELL, 0.5f, 1.0f)
+                    player.playFrontierSound(player.location, Sound.BLOCK_NOTE_BLOCK_BELL, 0.5f, 1.0f)
                 }
                 
                 deliveredCount++
@@ -603,7 +604,7 @@ class ChatServiceBukkit(
             if (player != null && player.isOnline) {
                 player.sendMessage(message)
                 if (soundNotification) {
-                    player.playSound(player.location, Sound.BLOCK_NOTE_BLOCK_BELL, 0.5f, 1.0f)
+                    player.playFrontierSound(player.location, Sound.BLOCK_NOTE_BLOCK_BELL, 0.5f, 1.0f)
                 }
                 deliveredCount++
             }

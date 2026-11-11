@@ -1,4 +1,5 @@
 package net.lumalyte.lg.interaction.menus.management
+import net.lumalyte.lg.interaction.listeners.sendFrontierMessage
 
 import net.lumalyte.lg.utils.inventoryframework.addPane
 import net.badgersmc.nexus.i18n.LangService
@@ -38,7 +39,7 @@ class ClaimTransferNamingMenu(private val menuNavigator: MenuNavigator, private 
 
     override fun open() {
         if (claim == null) {
-            player.sendMessage(lang.msg("menu.common.feedback.no_claim"))
+            player.sendFrontierMessage(lang.msg("menu.common.feedback.no_claim"))
             return
         }
 
@@ -85,6 +86,12 @@ class ClaimTransferNamingMenu(private val menuNavigator: MenuNavigator, private 
                     .name(lang.gui("creation_condition.claims"))
                 val guiPaperItem = GuiItem(paperItem) { guiEvent -> guiEvent.isCancelled = true }
                 secondPane.addItem(guiPaperItem, 0, 0)
+            }
+            AcceptTransferRequestResult.BufferConflict -> {
+                player.sendMessage(net.lumalyte.lg.interaction.listeners.FrontierTheme.message("Claim", "This transfer would break the buffer between claim owners."))
+            }
+            AcceptTransferRequestResult.RaidLocked -> {
+                player.sendFrontierMessage(net.kyori.adventure.text.Component.text("Claim transfer is locked by a raid or its cooldown."))
             }
             AcceptTransferRequestResult.NameAlreadyExists -> {
                 val paperItem = ItemStack.of(Material.PAPER)

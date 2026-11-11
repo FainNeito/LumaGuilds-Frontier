@@ -283,3 +283,16 @@ site/
 /resourcepack/
 /docs/previews/*.png
 
+
+# Local Frontier runtime state and credentials
+/server/
+/plugins/
+/world*/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+*.pem
+*.key
+/.kotlin/

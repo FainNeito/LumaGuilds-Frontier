@@ -46,7 +46,11 @@ data class MainConfig(
     var recruitment: RecruitmentConfig = RecruitmentConfig(),
     // Runtime feature gates. Legacy staging defaults are upgraded by ConfigCompatibilityMigrator.
     var chapterTwoRewardsEnabled: Boolean = true,
-    var chapterTwoGoldCostsEnabled: Boolean = false
+    var chapterTwoGoldCostsEnabled: Boolean = false,
+    var claimGeometry: ClaimGeometry = ClaimGeometry.BLOCKS,
+    var personalChunkLimit: Int = 4,
+    var guildChunkLimit: Int = 16,
+    var frontier: FrontierConfig = FrontierConfig()
 )
 
 /**
@@ -233,6 +237,7 @@ data class VaultConfig(
 
     // Physical Vault Settings
     var vaultChestEnabled: Boolean = true,
+    var goldCurrencyEnabled: Boolean = true,
 
     // Protection and Security
     var breakWarningTimeoutSeconds: Int = 5,
