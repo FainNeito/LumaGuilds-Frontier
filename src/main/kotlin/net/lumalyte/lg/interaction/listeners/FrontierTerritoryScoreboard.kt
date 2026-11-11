@@ -7,14 +7,18 @@ import net.kyori.adventure.text.format.TextColor
 import net.lumalyte.lg.application.persistence.ClaimRepository
 import net.lumalyte.lg.application.persistence.PartitionRepository
 import net.lumalyte.lg.application.services.FrontierRaidClaims
+import net.lumalyte.lg.application.services.FrontierRaidClaim
 import net.lumalyte.lg.application.services.GuildService
 import net.lumalyte.lg.application.services.RelationService
 import net.lumalyte.lg.config.FrontierConfig
 import net.lumalyte.lg.domain.entities.Claim
+import net.lumalyte.lg.domain.entities.Guild
 import net.lumalyte.lg.domain.entities.RelationType
+import net.lumalyte.lg.domain.entities.VaultStatus
 import net.lumalyte.lg.domain.values.Area
 import net.lumalyte.lg.domain.values.FrontierChunk
 import net.lumalyte.lg.domain.values.Position2D
+import net.lumalyte.lg.infrastructure.services.FrontierObjectives
 import org.bukkit.Bukkit
 import org.bukkit.ChatColor
 import org.bukkit.Location
@@ -58,6 +62,33 @@ internal enum class MapTile(val color: TextColor) {
     RESTRICTED(TextColor.color(0x4B4144)),
 }
 
+internal enum class MapSymbol(val glyph: String) {
+    SQUARE("■"), VAULT("▣"), WAR_BANNER("⚑"),
+}
+
+internal data class MapCell(val tile: MapTile, val symbol: MapSymbol = MapSymbol.SQUARE) {
+    companion object {
+        fun claimed(tile: MapTile, hasVault: Boolean) =
+            MapCell(tile, if (hasVault) MapSymbol.VAULT else MapSymbol.SQUARE)
+
+        fun raid(claim: FrontierRaidClaim) =
+            MapCell(MapTile.RAID, if (claim.bannerId != null) MapSymbol.WAR_BANNER else MapSymbol.SQUARE)
+    }
+}
+
+internal object FrontierMapVaults {
+    fun guildAt(guild: Guild?, chunk: FrontierChunk): Boolean {
+        if (guild?.vaultStatus != VaultStatus.AVAILABLE) return false
+        val vault = guild.vaultChestLocation ?: return false
+        return vault.worldId == chunk.worldId && Math.floorDiv(vault.x, 16) == chunk.x &&
+            Math.floorDiv(vault.z, 16) == chunk.z
+    }
+
+    fun soloAt(claim: Claim, primary: Boolean, chunk: FrontierChunk): Boolean =
+        claim.teamId == null && primary && claim.worldId == chunk.worldId &&
+            Math.floorDiv(claim.position.x, 16) == chunk.x && Math.floorDiv(claim.position.z, 16) == chunk.z
+}
+
 internal object FrontierMapOwnership {
     fun classify(
         owners: Collection<Claim>,
@@ -84,6 +115,7 @@ class FrontierTerritoryScoreboard(
     private val guilds: GuildService,
     private val relations: RelationService,
     private val raidClaims: FrontierRaidClaims,
+    private val objectives: FrontierObjectives,
 ) : Listener {
     private data class Display(
         val previous: Scoreboard,
@@ -157,11 +189,11 @@ class FrontierTerritoryScoreboard(
             Component.text("  FRONTIER  ", gold))
         objective.numberFormat(NumberFormat.blank())
         objective.displaySlot = DisplaySlot.SIDEBAR
-        val lines = (0 until 14).map { index ->
+        val lines = (0 until 15).map { index ->
             val entry = "${ChatColor.COLOR_CHAR}${index.toString(16)}"
             board.registerNewTeam("frontier_$index").also { team ->
                 team.addEntry(entry)
-                board.getObjective("frontier_map")!!.getScore(entry).score = 14 - index
+                board.getObjective("frontier_map")!!.getScore(entry).score = 15 - index
             }
         }
         return Display(player.scoreboard, board, objective, lines).also {
@@ -179,23 +211,33 @@ class FrontierTerritoryScoreboard(
         val center = FrontierChunk.atBlock(location.world.uid, location.blockX, location.blockZ)
         val ownGuilds = guilds.getPlayerGuilds(player.uniqueId).mapTo(mutableSetOf()) { it.id }
         val claimCache = mutableMapOf<UUID, Claim?>()
+        val guildCache = mutableMapOf<UUID, Guild?>()
+        val primarySoloCache = mutableMapOf<UUID, Boolean>()
         val allied = mutableMapOf<UUID, Boolean>()
         val now = System.currentTimeMillis()
 
-        fun tile(x: Int, z: Int): MapTile {
-            val world = center.worldId
+        fun tile(x: Int, z: Int): MapCell {
+            val chunk = FrontierChunk(center.worldId, x, z)
             val permanent = partitions.getByChunk(Position2D(x, z)).mapNotNull { partition ->
                 claimCache.getOrPut(partition.claimId) { claims.getById(partition.claimId) }
-                    ?.takeIf { it.worldId == world }
+                    ?.takeIf { it.worldId == chunk.worldId }
             }
             FrontierMapOwnership.classify(permanent, player.uniqueId, ownGuilds) { owner ->
                 allied.getOrPut(owner) {
                     ownGuilds.any { relations.getRelationType(it, owner) == RelationType.ALLY }
                 }
-            }?.let { return it }
-            if (raidClaims.at(FrontierChunk(world, x, z), now) != null) return MapTile.RAID
+            }?.let { ownership ->
+                val vault = permanent.any { claim ->
+                    claim.teamId?.let { owner ->
+                        FrontierMapVaults.guildAt(guildCache.getOrPut(owner) { guilds.getGuild(owner) }, chunk)
+                    } ?: FrontierMapVaults.soloAt(claim,
+                        primarySoloCache.getOrPut(claim.id) { objectives.primaryAnchor(claim) }, chunk)
+                }
+                return MapCell.claimed(ownership, vault)
+            }
+            raidClaims.at(chunk, now)?.let { return MapCell.raid(it) }
             val area = Area(Position2D(x * 16, z * 16), Position2D(x * 16 + 15, z * 16 + 15))
-            return if (config.permitsLand(area)) MapTile.WILDERNESS else MapTile.RESTRICTED
+            return MapCell(if (config.permitsLand(area)) MapTile.WILDERNESS else MapTile.RESTRICTED)
         }
 
         val grid = FrontierMapGrid.around(center.x, center.z, ::tile)
@@ -205,13 +247,21 @@ class FrontierTerritoryScoreboard(
         val legendBottom = Component.text("■ ", MapTile.RAID.color).append(Component.text("Raid  ", cream))
             .append(Component.text("■ ", MapTile.WILDERNESS.color)).append(Component.text("Wild  ", cream))
             .append(Component.text("◆ ", gold)).append(Component.text("You", cream))
+        val legendMarkers = Component.text("▣ ", cream).append(Component.text("Vault  ", cream))
+            .append(Component.text("⚑ ", MapTile.RAID.color)).append(Component.text("War banner", cream))
         val rows = listOf(legendTop) + grid.mapIndexed { z, row ->
             row.foldIndexed(Component.empty()) { x, line, cell ->
                 val marker = x == FrontierMapGrid.RADIUS && z == FrontierMapGrid.RADIUS
-                line.append(Component.text(if (marker) "◆" else "■", if (marker) gold else cell.color))
+                line.append(Component.text(if (marker) "◆" else cell.symbol.glyph,
+                    if (marker) gold else cell.tile.color))
                     .append(if (x == FrontierMapGrid.SIZE - 1) Component.empty() else Component.text(" "))
             }
-        } + listOf(legendBottom, Component.text("Chunk ${center.x}, ${center.z}", NamedTextColor.GRAY))
+        } + listOf(legendBottom, legendMarkers, Component.text("Chunk ${center.x}, ${center.z}" +
+            when (grid[FrontierMapGrid.RADIUS][FrontierMapGrid.RADIUS].symbol) {
+                MapSymbol.VAULT -> " · Vault here"
+                MapSymbol.WAR_BANNER -> " · Banner here"
+                MapSymbol.SQUARE -> ""
+            }, NamedTextColor.GRAY))
 
         display.lines.zip(rows).forEach { (team, row) -> team.prefix(row) }
     }

@@ -984,11 +984,11 @@ class LumaGuilds : JavaPlugin() {
             server.pluginManager.registerEvents(raidClaimListener, this)
             raidClaimListener.start()
             get().get<net.lumalyte.lg.infrastructure.listeners.WarBannerListener>().raidClaims = raidClaims
+            val objectives = get().get<net.lumalyte.lg.infrastructure.services.FrontierObjectives>()
             frontierTerritoryScoreboard = FrontierTerritoryScoreboard(
-                this, frontierConfig, get().get(), get().get(), get().get(), get().get(), raidClaims)
+                this, frontierConfig, get().get(), get().get(), get().get(), get().get(), raidClaims, objectives)
             server.pluginManager.registerEvents(frontierTerritoryScoreboard!!, this)
             frontierTerritoryScoreboard!!.start()
-            val objectives = get().get<net.lumalyte.lg.infrastructure.services.FrontierObjectives>()
             val experience = net.lumalyte.lg.interaction.listeners.FrontierClaimExperience(
                 this, get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), get().get(), objectives)
             get().declare(experience)
