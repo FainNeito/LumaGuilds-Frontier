@@ -44,7 +44,7 @@ fun LangService.gui(
 fun LangService.guiTitle(
     key: String,
     vararg placeholders: Pair<String, Any?>,
-): String = (if (net.lumalyte.lg.interaction.listeners.FrontierTheme.enabled) LegacyComponentSerializer.builder().character('§').hexColors().useUnusualXRepeatedCharacterHexFormat().build() else LegacyComponentSerializer.legacySection()).serialize(gui(key, *placeholders))
+): String = (if (net.lumalyte.lg.interaction.listeners.FrontierTheme.enabled) LegacyComponentSerializer.builder().character(LegacyComponentSerializer.SECTION_CHAR).hexColors().useUnusualXRepeatedCharacterHexFormat().build() else LegacyComponentSerializer.legacySection()).serialize(gui(key, *placeholders))
 
 /** Plain Unicode typography for Bedrock form APIs, which do not accept Adventure Components. */
 fun LangService.bedrock(

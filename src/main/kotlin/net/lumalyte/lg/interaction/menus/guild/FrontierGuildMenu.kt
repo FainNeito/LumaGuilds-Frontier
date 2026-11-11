@@ -12,11 +12,16 @@ import org.bukkit.Material
 import org.bukkit.Sound
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
+import net.badgersmc.nexus.i18n.LangService
+import net.lumalyte.lg.infrastructure.i18n.guiTitle
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 /** A vanilla inventory with no SMP dashboard links or resource-pack dependency. */
-object FrontierGuildMenu {
+object FrontierGuildMenu : KoinComponent {
+    private val lang: LangService by inject()
     fun open(player: Player, config: MainConfig) {
-        val gui = ChestGui(5, "§6Frontier §8| §6Guild & Claims")
+        val gui = ChestGui(5, lang.guiTitle("frontier_menu.title"))
         val pane = StaticPane(0, 0, 9, 5)
         gui.addPane(pane)
         gui.setOnGlobalClick { it.isCancelled = true }

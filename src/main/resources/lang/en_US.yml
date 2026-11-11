@@ -2,6 +2,9 @@
 #
 # All values are MiniMessage strings. Placeholders use <name> syntax.
 #
+frontier_menu:
+  title: '<gold>Frontier <dark_gray>|</dark_gray> Guild & Claims</gold>'
+
 quest_discovery:
   menu_name: '<gold>Guild Quests</gold>'
   menu_description: '<gray>View weekly objectives, rewards and guild progress.</gray>'
