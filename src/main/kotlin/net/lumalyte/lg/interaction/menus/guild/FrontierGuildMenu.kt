@@ -31,29 +31,24 @@ object FrontierGuildMenu : KoinComponent {
             pane.addItem(GuiItem(item) { player.closeInventory(); FrontierTheme.cue(player,FrontierTheme.Cue.CLICK); action() },x,y)
         }
         val guild = guilds.getPlayerGuilds(player.uniqueId).firstOrNull()
-        button(4,0,Material.WHITE_BANNER,guild?.name ?: "Frontier",listOf("Your guild · Your territory")) { player.performCommand("guild info") }
-        button(2,0,Material.BOOK,"Information & members",listOf("View your guild roster and information.")) { player.performCommand("guild info") }
-        button(6,0,Material.WRITABLE_BOOK,"Guild chat",listOf("Toggle your private guild channel.")) { player.performCommand("guild chat") }
-        button(2,1,Material.IRON_SWORD,"Ranks & permissions",listOf("Territory access, vault access and leadership.")) { FrontierRanksMenu.open(player) }
-        button(4,1,Material.MAP,"Territory",listOf("Claims, outlines, homes and expansion.")) { tools(player,config) }
-        button(6,1,Material.CHEST,"Founding Vault",listOf("Visit your vault for shared storage.","Its destruction releases your territory.")) { player.performCommand("guild getvault") }
-        button(0,2,Material.BOOK,"Survival guide",listOf("Claiming, travel and raid rules.")) { player.performCommand("serverinfo") }
-        button(3,2,Material.BOOK,"Diplomacy",listOf("Allies, enemies and requests.")) { FrontierDiplomacyMenu.open(player) }
-        button(5,2,Material.RED_BANNER,"Warfare",listOf("Declarations, vault objectives and war history.")) { FrontierWarMenu.open(player) }
-        button(8,2,Material.ANVIL,"Guild actions",listOf("Commands and guarded territory actions.")) { tools(player,config) }
+        button(4,0,Material.WHITE_BANNER,guild?.name ?: "Frontier",listOf("Information, roster and relations.")) { player.performCommand("guild info") }
+        button(2,0,Material.WRITABLE_BOOK,"Guild chat",listOf("Toggle private guild conversation.")) { player.performCommand("guild chat") }
+        button(6,0,Material.FEATHER,"Ally chat",listOf("Toggle conversation with your guild and allies.","Quick message: /gac <message>")) { player.performCommand("guild allychat") }
+        button(1,1,Material.IRON_SWORD,"Ranks & permissions",listOf("Territory, vault access and leadership.")) { FrontierRanksMenu.open(player) }
+        button(3,1,Material.MAP,"Territory",listOf("Claiming, borders, map and home.")) { tools(player,config) }
+        button(5,1,Material.CHEST,"Guild vault",listOf("Open shared storage inside your guild's land.","Unavailable in combat. Use /g vault.")) { player.performCommand("guild vault") }
+        button(7,1,Material.BOOK,"Diplomacy",listOf("Allies, enemies and requests.")) { FrontierDiplomacyMenu.open(player) }
+        button(2,2,Material.BOOK,"Survival guide",listOf("Claiming, travel and raid rules.")) { player.performCommand("serverinfo") }
+        button(4,2,Material.BARRIER,"Close",emptyList()) {}
+        button(6,2,Material.RED_BANNER,"Warfare",listOf("Declarations, objectives and war banners.")) { FrontierWarMenu.open(player) }
         gui.show(player)
     }
     private fun tools(player: Player, config: MainConfig) {
-        val gui = ChestGui(5, lang.guiTitle("frontier_menu.title"))
-        val pane = StaticPane(0, 0, 9, 5)
+        val gui = ChestGui(3, "Frontier | Territory")
+        val pane = StaticPane(0, 0, 9, 3)
         gui.addPane(pane)
         gui.setOnGlobalClick { it.isCancelled = true }
         gui.setOnGlobalDrag { it.isCancelled = true }
-        for (x in 0..8) {
-            val trim = ItemStack(if (x == 0 || x == 8) Material.RED_STAINED_GLASS_PANE else Material.YELLOW_STAINED_GLASS_PANE)
-            trim.editMeta { it.displayName(Component.text(" ")) }
-            pane.addItem(GuiItem(trim) { it.isCancelled = true }, x, 0)
-        }
         fun button(x: Int, y: Int, material: Material, title: String, lines: List<String>, action: () -> Unit) {
             val item = ItemStack(material)
             item.editMeta { meta ->
@@ -67,25 +62,18 @@ object FrontierGuildMenu : KoinComponent {
             }, x, y)
         }
         fun command(value: String) { player.performCommand(value) }
-        button(1, 1, Material.WHITE_BANNER, "Guild information", listOf("View your guild and members.")) { command("guild info") }
-        button(2, 2, Material.CHEST, "Guild vault", listOf("54 storage slots, available immediately.", "Use /claim to establish your Founding Vault.", "Expand into connected neighboring chunks.", "Visit the chest to access its contents.")) { command("guild getvault") }
-        button(6, 2, Material.MAP, "Territory & raids", listOf("Guild: ${config.guildChunkLimit} chunks", "Use /claim [name] to preview a chunk.", "One territory name across every chunk.", "Your Founding Vault protects all your land.")) { command("raidinfo") }
-        button(4, 1, Material.WRITABLE_BOOK, "Guild chat", listOf("Toggle private guild conversation.")) { command("guild chat") }
-        button(7, 1, Material.BOOK, "Guild commands", listOf("Clickable command suggestions.")) {
-            listOf("create <name>", "invite <player>", "join <guild>", "invites", "kick <player>", "tag <tag>", "description <text>", "rename <name>", "leave", "disband").forEach { syntax ->
-                val base = syntax.substringBefore(' ')
-                player.sendMessage(FrontierTheme.message("Guild", "/guild $syntax")
-                    .clickEvent(ClickEvent.suggestCommand("/guild $base ")))
-            }
+        button(1,0,Material.GRASS_BLOCK,"Claim this chunk",listOf("Preview before confirming.","Your first claim establishes the Founding Vault.")) { command("claim") }
+        button(3,0,Material.ENDER_EYE,"Show borders",listOf("Bright nearby guild borders for 60 seconds.","Use /guildoutline or /claim outline.")) { command("claimoutline") }
+        button(5,0,Material.FILLED_MAP,"Claim map",listOf("Toggle the nearby territory map.")) { command("claimmap") }
+        button(7,0,Material.LEATHER_BOOTS,"Walking autoclaim",listOf("Preview and confirm connected chunk claiming.","Stop with /autoclaim off.")) { command("autoclaim") }
+        button(2,1,Material.RED_BED,"Guild home",listOf("Teleport to your shared guild home.","Set with /g sethome. No raids or combat.")) { command("guildhome") }
+        button(4,1,Material.CLOCK,"Raid status",listOf("View the daily raid schedule and objectives.")) { command("raidinfo") }
+        button(6,1,Material.NAME_TAG,"Rename territory",listOf("One name for all your guild's claims.")) {
+            player.sendMessage(FrontierTheme.message("Claim", "Click to enter a territory name.").clickEvent(ClickEvent.suggestCommand("/claim rename ")))
         }
-        button(2, 3, Material.ENDER_EYE, "Show claim borders", listOf("View your nearby solo and guild claims.", "Gold particles remain visible for 30 seconds.")) { command("claimoutline") }
-        button(6, 3, Material.CHEST, "Pick up vault", listOf("Look at your vault and select this.", "Relocate outside the raid window.", "WARNING: packing UNCLAIMS ALL LAND.", "Stored items stay; no raid cooldown.")) { command("vaultpickup") }
-        button(3, 2, Material.RED_BED, "Guild home", listOf("One shared destination inside guild land.", "Set it with /guild sethome.", "5-second warmup; unavailable during raids.")) { command("guildhome") }
-        button(5, 2, Material.WHITE_BED, "Claim map", listOf("Toggle the nearby territory map.", "Uses available scoreboard space." )) { command("claimmap") }
-        button(1, 4, Material.GRASS_BLOCK, "Walking autoclaim", listOf("Review and confirm /autoclaim.", "Claim connected chunks as you walk.", "Use /autoclaim off to stop.")) { command("autoclaim") }
-        button(3, 4, Material.SHEARS, "Unclaim this chunk", listOf("Preview removing your current chunk.", "Confirm with /unclaim confirm.", "Cannot remove a bridge or Founding chunk.")) { command("unclaim") }
-        button(5, 4, Material.RED_BANNER, "War banner", listOf("Raid window only. One use per guild per 24h.", "Lasts up to 15 minutes; 20 damage points.", "Guild members: /guild warbanner tp")) { command("guild warbanner") }
-        button(7, 4, Material.BARRIER, "Close", emptyList()) {}
+        button(0,2,Material.SHEARS,"Unclaim this chunk",listOf("Preview removal; confirmation required.","Founding and connecting chunks cannot be removed.")) { command("unclaim") }
+        button(4,2,Material.ARROW,"Back",listOf("Return to your guild menu.")) { open(player,config) }
+        button(8,2,Material.CHEST,"Pack Founding Vault",listOf("Look at the vault. Outside raids only.","WARNING: confirms removal of ALL guild claims.","Stored items remain; no raid cooldown.")) { command("vaultpickup") }
         gui.show(player)
     }
 }

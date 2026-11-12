@@ -50,6 +50,19 @@ class FrontierClaimExperience(
     private val autoPending = mutableMapOf<UUID, Pair<FrontierOwner, Instant>>()
     private val auto = mutableMapOf<UUID, Pair<FrontierOwner, UUID>>()
 
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onClaimCommand(event: org.bukkit.event.player.PlayerCommandPreprocessEvent) {
+        val parts = event.message.removePrefix("/").trim().split(Regex("\\s+"), limit = 2)
+        if (parts.first().lowercase(java.util.Locale.ROOT) !in setOf("claim", "lumaguilds:claim")) return
+        // Frontier owns this command; route it before the inherited SMP command tree dispatch.
+        event.isCancelled = true
+        if (!event.player.hasPermission("lumaguilds.command.claim")) {
+            tell(event.player, "You do not have permission to claim.")
+            return
+        }
+        claimCommand(event.player, parts.getOrElse(1) { "" })
+    }
+
     fun start() {
         fun command(name: String, action: (Player, Array<out String>) -> Unit) {
             plugin.getCommand(name)?.setExecutor { sender, _, _, args ->
@@ -61,8 +74,8 @@ class FrontierClaimExperience(
         command("claimconfirm") { player, _ -> confirm(player) }
         command("claimcancel") { player, _ -> previews.remove(player.uniqueId); tell(player, "Preview cancelled. No claim was created.") }
         command("claimoutline") { player, _ ->
-            outlines[player.uniqueId] = clock().plusSeconds(30)
-            tell(player, "Showing your nearby personal and guild claim borders for 30 seconds.")
+            outlines[player.uniqueId] = clock().plusSeconds(60)
+            tell(player, "Showing your nearby guild claim borders for 60 seconds.")
         }
         command("vaultpickup") { player, args -> pickup(player, args.singleOrNull() == "confirm-unclaim-all") }
         command("unclaim") { player, args -> unclaim(player,args.singleOrNull() ?: "") }
@@ -90,7 +103,7 @@ class FrontierClaimExperience(
                         partitions.getByClaim(claim.id).take(64).forEach { partition ->
                             val a = partition.area
                             draw(player, a.lowerPosition2D.x, a.lowerPosition2D.z,
-                                a.upperPosition2D.x + 1, a.upperPosition2D.z + 1, Color.fromRGB(0xD6B56C))
+                                a.upperPosition2D.x + 1, a.upperPosition2D.z + 1, Color.fromRGB(0x36FFE0))
                         }
                     }
                 }
@@ -126,7 +139,7 @@ class FrontierClaimExperience(
             }
             "confirm" -> { confirm(player); return }
             "cancel" -> { previews.remove(player.uniqueId); tell(player, "Preview cancelled."); return }
-            "outline" -> { outlines[player.uniqueId] = clock().plusSeconds(30); tell(player, "Showing territory borders for 30 seconds."); return }
+            "outline" -> { outlines[player.uniqueId] = clock().plusSeconds(60); tell(player, "Showing territory borders for 60 seconds."); return }
             "auto" -> { autoclaim(player,text.substringAfter(' ',"")); return }
             "unclaim" -> { unclaim(player,text.substringAfter(' ',"")); return }
             "rename" -> {
@@ -195,10 +208,12 @@ class FrontierClaimExperience(
     private fun draw(player: Player, x0: Int, z0: Int, x1: Int, z1: Int, color: Color) {
         // Bounded per-viewer rendering, no chunk loads or world edits.
         val y = player.location.y + 0.25
-        val dust = Particle.DustOptions(color, 1.2f)
+        val dust = Particle.DustOptions(color, 2.0f)
         fun point(x: Double, z: Double) {
-            if (kotlin.math.abs(x - player.location.x) <= 96 && kotlin.math.abs(z - player.location.z) <= 96)
-                player.spawnParticle(Particle.DUST, x, y, z, 1, 0.0, 0.0, 0.0, 0.0, dust)
+            if (kotlin.math.abs(x - player.location.x) <= 48 && kotlin.math.abs(z - player.location.z) <= 48) {
+                player.spawnParticle(Particle.DUST, x, y, z, 1, 0.0, 0.0, 0.0, 0.0, dust, true)
+                player.spawnParticle(Particle.DUST, x, y + 1.5, z, 1, 0.0, 0.0, 0.0, 0.0, dust, true)
+            }
         }
         val stepX = maxOf(1, (x1 - x0) / 64)
         val stepZ = maxOf(1, (z1 - z0) / 64)
@@ -232,7 +247,7 @@ class FrontierClaimExperience(
         val owner = owner(player)
         if (config.frontier.guildOnlyClaims && owner.type == FrontierOwnerType.PERSONAL) { tell(player,"Create or join a guild first. One-person guilds are welcome."); return }
         if (config.frontier.guildOnlyClaims && claims.getByPlayer(player.uniqueId).any { it.teamId == null }) { tell(player,"Migrate your existing solo land with /claim migrate before claiming more land."); return }
-        if (!player.hasPermission("bellclaims.action.bell") || !manages(player, owner)) { tell(player,"You cannot manage this territory."); return }
+        if (!player.hasPermission("lumaguilds.command.claim") || !manages(player, owner)) { tell(player,"You cannot manage this territory."); return }
         if (location.world.environment != World.Environment.NORMAL || location.world.name != config.frontier.worldName) { tell(player,"Territories belong in the Frontier overworld."); return }
         if (config.frontier.schedule.stateAt(clock()).active || !objectives.siege.canReplace(owner, clock())) { tell(player,"Claiming is locked during raids and replacement cooldowns."); return }
         val foundation = territory.foundation(owner)
@@ -249,12 +264,13 @@ class FrontierClaimExperience(
             return
         }
         previews[player.uniqueId] = Preview(location.clone(),clock().plusSeconds(30),territoryName,owner,foundation?.id)
-        tell(player,"Preview: $territoryName — chunk ${position.getChunk().x}, ${position.getChunk().z}. ${if(foundation == null) "Your Founding Vault will be placed here." else "Expands your territory; no extra vault or bell is placed."}")
-        player.sendMessage(FrontierTheme.message("Confirm","[Claim this chunk]").clickEvent(ClickEvent.runCommand("/claim confirm")))
-        player.sendMessage(FrontierTheme.message("Cancel","[Cancel] — expires in 30 seconds.").clickEvent(ClickEvent.runCommand("/claim cancel")))
+        tell(player,"Preview: $territoryName — chunk ${position.getChunk().x}, ${position.getChunk().z}. ${if(foundation == null) "Your Founding Vault will be placed here." else "Expands your territory using the existing Founding Vault."}")
+        player.sendMessage(FrontierTheme.message("Confirm","[Claim this chunk]").clickEvent(ClickEvent.runCommand("/claimconfirm")))
+        player.sendMessage(FrontierTheme.message("Cancel","[Cancel] — expires in 30 seconds.").clickEvent(ClickEvent.runCommand("/claimcancel")))
     }
 
     fun confirm(player: Player) {
+        if (!player.hasPermission("lumaguilds.command.claim")) { previews.remove(player.uniqueId); tell(player,"You do not have permission to claim."); return }
         val preview = previews.remove(player.uniqueId)
         if (preview == null || clock() >= preview.expires) { tell(player,"Use /claim [name] to preview a chunk first."); return }
         val l = preview.location
@@ -299,7 +315,7 @@ class FrontierClaimExperience(
                         tell(player,"Founding Vault could not be placed. No territory was retained."); return
                     }
                 }
-                outlines[player.uniqueId] = clock().plusSeconds(30)
+                outlines[player.uniqueId] = clock().plusSeconds(60)
                 tell(player,"Claimed chunk for ${result.claim.name}. All chunks share this name. Use /claim rename <name> to rename the territory.")
                 FrontierTheme.cue(player,FrontierTheme.Cue.SUCCESS)
             }
@@ -401,7 +417,7 @@ class FrontierClaimExperience(
             auto.remove(player.uniqueId); autoPending.remove(player.uniqueId); tell(player,"Autoclaim OFF."); return
         }
         val target=owner(player)
-        if (!manages(player,target) || !player.hasPermission("bellclaims.action.bell")) return tell(player,"You cannot manage this territory.")
+        if (!manages(player,target) || !player.hasPermission("lumaguilds.command.claim")) return tell(player,"You cannot manage this territory.")
         if (territory.foundation(target)==null) return tell(player,"Use /claim and confirm your Founding Vault before enabling autoclaim.")
         if (config.frontier.schedule.stateAt(clock()).active || !objectives.siege.canReplace(target,clock())) return tell(player,"Autoclaim is locked during raids and cooldowns.")
         if (argument.equals("confirm",true)) {

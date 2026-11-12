@@ -37,7 +37,8 @@ commands:
   claimcancel:
     description: Cancel your Frontier chunk preview
   claimoutline:
-    description: Show nearby personal and guild claim borders
+    aliases: [guildoutline]
+    description: Show nearby guild claim borders
   vaultpickup:
     description: Pack your Founding Vault and surrender ALL territory claims
   raidinfo:
@@ -291,7 +292,7 @@ permissions:
 
   lumaguilds.command.claim:
     description: Basic claim management
-    default: op
+    default: true
   lumaguilds.command.claim.addflag:
     description: Add flags to claims
     default: op

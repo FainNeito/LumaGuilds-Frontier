@@ -57,6 +57,11 @@ class GuildInfoMenu(private val menuNavigator: MenuNavigator, private val player
             return
         }
 
+        if (net.lumalyte.lg.interaction.listeners.FrontierTheme.enabled) {
+            openFrontier()
+            return
+        }
+
         val gui = ChestGui(6, MenuTitleBuilder.build(guild.guiTheme, 6, lang.guiTitle("menu.guild_info.title", "guild" to guild.name)))
         val pane = StaticPane(0, 0, 9, 6)
         gui.setOnTopClick { guiEvent -> guiEvent.isCancelled = true }
@@ -88,6 +93,38 @@ class GuildInfoMenu(private val menuNavigator: MenuNavigator, private val player
 
         gui.addPane(pane)
         gui.show(player)
+    }
+
+    private fun openFrontier() {
+        val gui = ChestGui(3, "Guild Info | ${guild.name}")
+        val pane = StaticPane(0,0,9,3)
+        gui.setOnGlobalClick { it.isCancelled = true }
+        gui.setOnGlobalDrag { it.isCancelled = true }
+        fun item(x: Int, y: Int, material: Material, title: String, lines: List<String>, action: () -> Unit = {}) {
+            val stack = ItemStack(material)
+            stack.editMeta { meta ->
+                meta.displayName(net.lumalyte.lg.interaction.listeners.FrontierTheme.heading(title))
+                meta.lore(lines.map { net.kyori.adventure.text.Component.text(it, net.lumalyte.lg.interaction.listeners.FrontierTheme.cream)
+                    .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC,false) })
+            }
+            pane.addItem(GuiItem(stack) { action() },x,y)
+        }
+        item(4,0,Material.SHIELD,guild.name,listOf("Members: ${memberService.getMemberCount(guild.id)}", "Founded: ${guild.createdAt.atZone(java.time.ZoneId.systemDefault()).toLocalDate()}"))
+        item(2,0,Material.PLAYER_HEAD,"Members",listOf("View the roster, ranks and member details.")) {
+            menuNavigator.openMenu(menuFactory.createGuildMemberListMenu(menuNavigator,player,guild))
+        }
+        addDescriptionSection(pane,6,0)
+        val relations = relationService.getGuildRelations(guild.id)
+        listOf(RelationType.ALLY to Material.LIME_BANNER, RelationType.TRUCE to Material.WHITE_BANNER, RelationType.ENEMY to Material.RED_BANNER)
+            .forEachIndexed { index, (type, material) ->
+                val entries = relations.filter { it.type == type && it.isActive() }.mapNotNull { guildService.getGuild(it.getOtherGuild(guild.id)) }
+                val title = when(type) { RelationType.ALLY -> "Allies"; RelationType.TRUCE -> "Truces"; else -> "Enemies" }
+                item(2 + index*2,1,material,"$title (${entries.size})",entries.take(4).map { it.name } + "Click to browse guilds.") {
+                    menuNavigator.openMenu(menuFactory.createGuildRelationBrowserMenu(menuNavigator,player,guild,type))
+                }
+            }
+        addBackButton(pane,4,2)
+        gui.addPane(pane); gui.show(player)
     }
 
     private fun addGuildOverview(pane: StaticPane, x: Int, y: Int) {
@@ -274,8 +311,10 @@ class GuildInfoMenu(private val menuNavigator: MenuNavigator, private val player
     private fun addStatisticsSection(pane: StaticPane, x: Int, y: Int) {
         val statsItem = ItemStack.of(Material.BOOK)
             .name(lang.gui("menu.guild_info.statistics.name"))
-            .lore(lang.gui("menu.guild_info.statistics.balance", "balance" to bankService.getBalance(guild.id)))
             .lore(lang.gui("menu.guild_info.statistics.level", "level" to guild.level))
+
+        if (!net.lumalyte.lg.interaction.listeners.FrontierTheme.enabled)
+            statsItem.lore(lang.gui("menu.guild_info.statistics.balance", "balance" to bankService.getBalance(guild.id)))
 
         val killTarget = warService.getWarKillWinTarget()
         warService.getWarsForGuild(guild.id).filter { it.isActive }.forEach { war ->
@@ -326,7 +365,10 @@ class GuildInfoMenu(private val menuNavigator: MenuNavigator, private val player
             .lore(lang.gui("menu.guild_info.back.description"))
 
         val backGuiItem = GuiItem(backItem) {
-            menuNavigator.goBack()
+            if (net.lumalyte.lg.interaction.listeners.FrontierTheme.enabled && !menuNavigator.hasParent()) {
+                val config = org.koin.core.context.GlobalContext.get().get<net.lumalyte.lg.application.services.ConfigService>().loadConfig()
+                FrontierGuildMenu.open(player,config)
+            } else menuNavigator.goBack()
         }
         pane.addItem(backGuiItem, x, y)
     }

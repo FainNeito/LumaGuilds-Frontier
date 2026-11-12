@@ -1,0 +1,12 @@
+SPEAR work record: non-op claiming and confirmation, 2026-11-11
+
+Requirement: guild owners can preview/confirm claims without operator status; guild rank checks remain authoritative. Chat confirmation should run a registered command directly. Preserve world/server version.
+Evidence: basic lumaguilds.command.claim defaulted to op; preview/autoclaim additionally required obsolete undeclared bellclaims.action.bell. Client screenshot shows hidden/red root and unknown-command confirmation dialog.
+Plan/execution: default basic claim command true, replace bell permission with basic claim permission, recheck basic permission on confirmation, point confirmation/cancellation links at already registered claimconfirm/claimcancel commands. Keep MANAGE_CLAIMS, PLACE_VAULT, proximity, expiry and territory validation.
+Verification: three new tests failed before implementation (default access, non-op preview without bell permission, permission revocation before confirmation). After implementation 161 Frontier tests pass, zero failures/errors/skips; shadowJar test.27 and snapshot-8 loopback startup pass. Evidence under frontier-26.4-snapshot8/evidence/claim-permission-{red,green}.log and warning-lab.log.
+Review: no operator/admin grant, no claim/world migration, existing cancellation and validation retained. Direct game-client click/command-tree verification still pending.
+Deployment: test.27 package prepared, test.26 rollback archived in claim-permission-fix/rollback.zip. Bloom deployment in progress; update this record after startup verification.
+
+Deployment verified: Bloom started successfully at 03:17 UTC Nov 12; version command reports 3.0.0-frontier-test.27, 100 slots retained. Existing server runtime/world untouched. No startup ERROR in visible console. Client command/click/inventory/chat retry requested and pending. Screenshot claim-permission-fix/bloom-verified.jpg.
+
+Final verification: user confirmed inventory, claim command and confirmation work after deployment. Chat was later confirmed working; companion protocol/client diagnostics are outside this repository.

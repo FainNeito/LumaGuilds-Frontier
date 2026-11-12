@@ -12,6 +12,17 @@ import java.util.UUID
 import kotlin.test.*
 
 class FrontierTerritoryRemovalTest {
+    @Test fun `leaving territory sends chat even when destination is wilderness`() {
+        val world=mockk<org.bukkit.World>(); every { world.uid } returns UUID.randomUUID(); every { world.name } returns "frontier"
+        val player=mockk<org.bukkit.entity.Player>(relaxed=true)
+        val claim=Claim(world.uid,UUID.randomUUID(),UUID.randomUUID(),Position3D(0,64,0),"Ashen Keep")
+        val lookup=mockk<net.lumalyte.lg.application.actions.claim.GetClaimAtPosition>()
+        every { lookup.execute(world.uid,Position2D(15,0)) } returns net.lumalyte.lg.application.results.claim.GetClaimAtPositionResult.Success(claim)
+        every { lookup.execute(world.uid,Position2D(16,0)) } returns net.lumalyte.lg.application.results.claim.GetClaimAtPositionResult.NoClaimFound
+        val listener=FrontierAlertListener(mockk(),FrontierConfig(enabled=true),lookup,mockk())
+        listener.onMove(org.bukkit.event.player.PlayerMoveEvent(player,org.bukkit.Location(world,15.0,64.0,0.0),org.bukkit.Location(world,16.0,64.0,0.0)))
+        verify(exactly=1) { player.sendMessage(match<net.kyori.adventure.text.Component> { net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(it).contains("Leaving Ashen Keep.") }) }
+    }
     @Test fun `cannot unclaim founding or bridge but can unclaim connected outer edge`() {
         val world=UUID.randomUUID(); val player=UUID.randomUUID()
         val root=Claim(world,player,null,Position3D(0,64,0),"Keep")
