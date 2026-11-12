@@ -88,6 +88,18 @@ internal class VaultSessionPermissionTest {
         MockBukkit.unmock()
     }
 
+    @Test fun combatBlocksOpenAndExistingVault() {
+        val fixture = Fixture(RankPermission.entries.toSet(), combatLocked = true)
+        val click = fixture.click(InventoryAction.MOVE_TO_OTHER_INVENTORY, PLAYER_SLOT)
+        fixture.listener.onInventoryClick(click)
+        assertTrue(click.isCancelled)
+        val open = InventoryOpenEvent(fixture.player.openInventory)
+        fixture.listener.authorizeVaultOpen(open)
+        assertTrue(open.isCancelled)
+        fixture.server.scheduler.performOneTick()
+        assertTrue(fixture.player.openInventory.topInventory !== fixture.inventory)
+    }
+
     @Test fun revokedViewCloses() {
         val permissions = mutableSetOf(RankPermission.ACCESS_VAULT)
         val fixture = Fixture(permissions)
@@ -275,6 +287,7 @@ private class Fixture(
     private val unlockedCapacity: Int = VAULT_SIZE,
     private val progressionLevel: Int = 100,
     private val cachedProgressionLevel: Int = progressionLevel,
+    combatLocked: Boolean = false,
 ) {
     val server = MockBukkit.mock()
     val plugin = MockBukkit.createMockPlugin()
@@ -295,6 +308,7 @@ private class Fixture(
             members,
             mockk(relaxed = true),
             progression,
+            combatLocked = { combatLocked },
         )
 
     init {
