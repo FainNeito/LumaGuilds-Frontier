@@ -50,6 +50,7 @@ class VaultInventoryListener(
     private val memberService: MemberService,
     private val platformDetectionService: PlatformDetectionService,
     private val progressionRepository: ProgressionRepository,
+    private val combatLocked: (Player) -> Boolean = { FrontierTheme.enabled && net.lumalyte.lg.utils.CombatUtil.isInCombat(it) },
 ) : Listener, KoinComponent {
 
     private val bankService: BankService by inject()
@@ -136,6 +137,11 @@ class VaultInventoryListener(
     }
 
     private fun hasCurrentAccess(player: Player, holder: VaultInventoryHolder): Boolean {
+        if (combatLocked(player)) {
+            player.sendMessage(FrontierTheme.message("Vault", "You cannot use your guild vault while in combat.", true))
+            closeRevokedView(player, holder)
+            return false
+        }
         val allowed = memberService.hasPermission(player.uniqueId, holder.guildId, RankPermission.ACCESS_VAULT)
         if (!allowed) {
             player.sendMessage(lang.msg("notification.vault.inventory.access_denied"))
@@ -147,7 +153,7 @@ class VaultInventoryListener(
     private fun closeRevokedView(player: Player, holder: VaultInventoryHolder) {
         org.bukkit.Bukkit.getScheduler().runTask(plugin, Runnable {
             val stillViewing = player.openInventory.topInventory === holder.inventory
-            val restored = memberService.hasPermission(player.uniqueId, holder.guildId, RankPermission.ACCESS_VAULT)
+            val restored = !combatLocked(player) && memberService.hasPermission(player.uniqueId, holder.guildId, RankPermission.ACCESS_VAULT)
             if (player.isOnline && stillViewing && !restored) player.closeInventory()
         })
     }

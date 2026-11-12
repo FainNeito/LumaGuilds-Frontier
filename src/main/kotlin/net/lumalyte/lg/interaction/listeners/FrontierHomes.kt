@@ -93,7 +93,7 @@ class FrontierHomes(
         val foundation = territory.foundation(owner) ?: run { tell(player, "Establish your Founding Vault before setting a home."); return }
         val path = key(owner)
         if (set) {
-            if (guild && !members.hasPermission(player.uniqueId, owner.id, RankPermission.MANAGE_CLAIMS)) {
+            if (guild && !members.hasPermission(player.uniqueId, owner.id, RankPermission.MANAGE_HOME)) {
                 tell(player, "Your guild rank cannot change its home."); return
             }
             val destination = player.location.clone()

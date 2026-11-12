@@ -89,6 +89,21 @@ class FrontierHomesTest {
         h.command(player,true,false); advance(); h.tick()
         assertEquals(destination,player.location)
     }
+    @Test fun `guild home uses Manage Home independently of Manage Claims`() = scenario {
+        claim=claim.copy(teamId=guild.id)
+        every { members.hasPermission(any(),any(),any()) } returns false
+        every { members.hasPermission(player.uniqueId,guild.id,RankPermission.MANAGE_HOME) } returns true
+        val h=homes(true); h.command(player,true,true)
+        assertNotNull(h.loadLocation("GUILD.${guild.id}.location"))
+    }
+    @Test fun `Manage Claims alone cannot set guild home`() = scenario {
+        claim=claim.copy(teamId=guild.id)
+        every { members.hasPermission(any(),any(),any()) } returns false
+        every { members.hasPermission(player.uniqueId,guild.id,RankPermission.MANAGE_CLAIMS) } returns true
+        val h=homes(true); h.command(player,true,true)
+        assertNull(h.loadLocation("GUILD.${guild.id}.location"))
+    }
+
     @Test fun `single personal slot survives reload and replacing it changes destination`() = scenario {
         homes().command(player,false,true)
         player.teleport(origin)
