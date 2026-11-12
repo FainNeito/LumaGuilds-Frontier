@@ -7,6 +7,21 @@ import org.junit.jupiter.api.Test
 import kotlin.test.*
 
 class FrontierMenuAccessRegressionTest {
+    @Test fun `retired onboarding commands do not open the Frontier menu`() {
+        val player = io.mockk.mockk<org.bukkit.entity.Player>(relaxed = true)
+        io.mockk.every { player.hasPermission(any<String>()) } returns true
+        var opened = false
+        val rules = FrontierServerRules(FrontierConfig(enabled = true)) { opened = true }
+        for (root in listOf("g", "guild", "guilds", "lumaguilds:g")) {
+            for (command in listOf("start", "gettingstarted", "start dismiss")) {
+                val event = org.bukkit.event.player.PlayerCommandPreprocessEvent(player, "/$root $command")
+                rules.onCommand(event)
+                assertTrue(event.isCancelled)
+                assertFalse(opened, "Retired command must not open the menu: ${event.message}")
+                assertFalse(command.substringBefore(' ') in FrontierServerRules.guildCommands)
+            }
+        }
+    }
     @Test fun `guild filter permits vault and ally chat`() {
         assertTrue("vault" in FrontierServerRules.guildCommands)
         assertTrue("allychat" in FrontierServerRules.guildCommands)

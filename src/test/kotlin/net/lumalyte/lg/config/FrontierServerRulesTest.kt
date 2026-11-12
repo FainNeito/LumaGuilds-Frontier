@@ -83,12 +83,12 @@ class FrontierServerRulesTest {
         verify { glide.isCancelled = true }
     }
 
-    @Test fun `menu aliases and onboarding open frontier menu without legacy dispatch`() {
+    @Test fun `supported menu aliases open frontier menu without legacy dispatch`() {
         val player = mockk<org.bukkit.entity.Player>(relaxed = true)
         every { player.hasPermission("lumaguilds.guild.menu") } returns true
         val open = mockk<(org.bukkit.entity.Player) -> Unit>(relaxed = true)
         val rules = FrontierServerRules(FrontierConfig(enabled = true), open)
-        val commands = listOf("/guild", "/g", "/guild menu", "/lumaguilds:g menu", "/g help", "/g start ignored")
+        val commands = listOf("/guild", "/g", "/guild menu", "/lumaguilds:g menu", "/g help")
         commands.forEach {
             val event = PlayerCommandPreprocessEvent(player, it)
             rules.onCommand(event)

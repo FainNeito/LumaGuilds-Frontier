@@ -36,6 +36,7 @@ class GuildMemberListMenu(private val menuNavigator: MenuNavigator, private val 
     private val memberService: MemberService by inject()
     private val rankService: RankService by inject()
     private val lang: LangService by inject()
+    private val menuFactory: net.lumalyte.lg.interaction.menus.MenuFactory by inject()
 
     override fun open() {
         val gui = ChestGui(6, MenuTitleBuilder.build(
@@ -92,12 +93,18 @@ class GuildMemberListMenu(private val menuNavigator: MenuNavigator, private val 
                 }
             }
 
+            if (net.lumalyte.lg.interaction.listeners.FrontierTheme.enabled &&
+                memberService.hasPermission(player.uniqueId, guild.id, net.lumalyte.lg.domain.entities.RankPermission.MANAGE_MEMBERS)) {
+                memberItem.lore(net.kyori.adventure.text.Component.text("Click to promote or demote.",
+                    net.lumalyte.lg.interaction.listeners.FrontierTheme.cream)
+                    .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false))
+            }
             memberItem.setData(
                 DataComponentTypes.PROFILE,
                 ResolvableProfile.resolvableProfile().uuid(member.playerId).build()
             )
 
-            GuiItem(memberItem)
+            GuiItem(memberItem) { openMemberRank(member.playerId) }
         }
 
         // Populate pages with members (45 per page = 9x5 grid)
@@ -166,6 +173,14 @@ class GuildMemberListMenu(private val menuNavigator: MenuNavigator, private val 
         gui.addPane(paginatedPane)
         gui.addPane(staticPane)
         gui.show(player)
+    }
+
+    internal fun openMemberRank(memberId: java.util.UUID) {
+        if (!net.lumalyte.lg.interaction.listeners.FrontierTheme.enabled) return
+        if (!memberService.hasPermission(player.uniqueId, guild.id, net.lumalyte.lg.domain.entities.RankPermission.MANAGE_MEMBERS)) return
+        // Re-read the member and permission at click time; the roster can be stale.
+        val currentMember = memberService.getMember(memberId, guild.id) ?: return
+        menuNavigator.openMenu(menuFactory.createGuildMemberRankMenu(menuNavigator, player, guild, currentMember))
     }
 
     override fun passData(data: Any?) {
