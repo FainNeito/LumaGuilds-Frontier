@@ -18,6 +18,27 @@ import java.util.UUID
 import kotlin.test.*
 
 class FrontierClaimExperienceTest {
+    @Test fun `basic claim command is available to non operators by default`() {
+        val yaml = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(java.io.File("src/main/resources/plugin.yml"))
+        assertEquals("true", yaml.getString("permissions.lumaguilds.command.claim.default"))
+    }
+    @Test fun `basic claim permission permits preview without obsolete bell permission`() = scenario { experience,player,_,create ->
+        player.isOp=false
+        val permitted=spyk(player)
+        every { permitted.hasPermission("lumaguilds.command.claim") } returns true
+        every { permitted.hasPermission("bellclaims.action.bell") } returns false
+        experience.claimCommand(permitted,"Keep")
+        experience.confirm(permitted)
+        verify(exactly=1) { create.executeFrontier(any(),any(),any(),any(),any()) }
+    }
+    @Test fun `revoking basic claim permission invalidates a pending preview`() = scenario { experience,player,_,create ->
+        val permitted=spyk(player)
+        every { permitted.hasPermission("lumaguilds.command.claim") } returns true
+        experience.claimCommand(permitted,"Keep")
+        every { permitted.hasPermission("lumaguilds.command.claim") } returns false
+        experience.confirm(permitted)
+        verify(exactly=0) { create.executeFrontier(any(),any(),any(),any(),any()) }
+    }
     private val safe = Instant.parse("2026-11-10T12:00:00Z")
     private fun config() = MainConfig(frontier = FrontierConfig(enabled=true))
     private fun scenario(result: CreateClaimResult? = null, action: (FrontierClaimExperience,Player,Location,CreateClaim)->Unit) {
@@ -39,6 +60,19 @@ class FrontierClaimExperienceTest {
             val experience=FrontierClaimExperience(plugin,config(),create,valid,mockk(relaxed=true),mockk(relaxed=true),mockk(relaxed=true),mockk(relaxed=true),mockk(relaxed=true),objectives) { safe }
             action(experience,player,location,create)
         } finally { MockBukkit.unmock(); unmockkAll() }
+    }
+    @Test fun `bare and namespaced claim route to preview without SMP dispatch`() = scenario { experience,player,_,_ ->
+        val route=spyk(experience)
+        every { route.claimCommand(any(),any()) } just Runs
+        for (text in listOf("/claim", "/lumaguilds:claim", "/claim rename Ashen Keep")) {
+            val event=org.bukkit.event.player.PlayerCommandPreprocessEvent(player,text)
+            route.onClaimCommand(event)
+            assertTrue(event.isCancelled)
+        }
+        verify(exactly=2) { route.claimCommand(player,"") }
+        verify(exactly=1) { route.claimCommand(player,"rename Ashen Keep") }
+        val other=org.bukkit.event.player.PlayerCommandPreprocessEvent(player,"/claimmap")
+        route.onClaimCommand(other);assertFalse(other.isCancelled)
     }
     @Test fun `claim preview creates no block and confirmation creates exactly one solo vault without tools`() = scenario { experience,player,location,create ->
         experience.claimCommand(player,"Ashen Keep")

@@ -28,7 +28,7 @@ object FrontierRanksMenu : KoinComponent {
         RankPermission.MANAGE_PERMISSIONS,RankPermission.MANAGE_CLAIMS,RankPermission.MANAGE_HOME,
         RankPermission.MANAGE_RELATIONS,RankPermission.DECLARE_WAR,RankPermission.PLACE_WAR_BANNER,
         RankPermission.ACCESS_VAULT,RankPermission.DEPOSIT_TO_VAULT,RankPermission.WITHDRAW_FROM_VAULT,
-        RankPermission.MANAGE_VAULT,RankPermission.MANAGE_DESCRIPTION,RankPermission.MANAGE_BANNER)
+        RankPermission.PLACE_VAULT,RankPermission.BREAK_VAULT,RankPermission.MANAGE_VAULT,RankPermission.MANAGE_DESCRIPTION,RankPermission.MANAGE_BANNER)
 
     private fun menu(title: String): Pair<ChestGui,StaticPane> {
         val gui = ChestGui(6,title); val pane = StaticPane(0,0,9,6); gui.addPane(pane)
@@ -56,7 +56,7 @@ object FrontierRanksMenu : KoinComponent {
         button(pane,53,Material.ARROW,"Next",emptyList()) { open(player,index+1) }
         gui.show(player)
     }
-    private fun edit(player: Player,rankId: UUID) {
+    private fun edit(player: Player,rankId: UUID, territory: Boolean = true) {
         val target = ranks.getRank(rankId) ?: return
         if (ranks.getPlayerRank(player.uniqueId,target.guildId) == null) { player.closeInventory(); return }
         val actual = (resolver as GuildRolePermissionResolverBukkit).permissionsForRank(target)
@@ -64,20 +64,22 @@ object FrontierRanksMenu : KoinComponent {
         button(pane,4,Material.MAP,"${target.name} permissions",listOf("Applies to all guild territory.","Raid vulnerability is always enforced.","Owner rank is protected.")) {}
         fun feedback(changed: Boolean) {
             if (!changed) player.sendMessage(FrontierTheme.message("Ranks","You can only edit lower ranks with the required authority, and cannot grant access you lack."))
-            edit(player,rankId)
+            edit(player,rankId,territory)
         }
-        ClaimPermission.entries.forEachIndexed { i,permission ->
+        button(pane,0,Material.GRASS_BLOCK,"Territory permissions",listOf("Building, containers and interactions.","Click to view territory access.")) { edit(player,rankId,true) }
+        button(pane,8,Material.IRON_SWORD,"Guild permissions",listOf("Leadership, diplomacy and vault access.","Click to view guild authority.")) { edit(player,rankId,false) }
+        if (territory) ClaimPermission.entries.forEachIndexed { i,permission ->
             val enabled = permission in actual
             button(pane,9+i,if(enabled) Material.LIME_DYE else Material.GRAY_DYE,
-                permission.name.lowercase().replace('_',' '),listOf("Territory access: ${if(enabled) "allowed" else "denied"}","Click to toggle.")) {
+                permission.name.lowercase().replace('_',' ').replaceFirstChar { it.titlecase() },listOf(claimDescription(permission), "", "Status: ${if(enabled) "Allowed" else "Denied"}","Click to toggle. Changes save immediately.")) {
                 try { feedback(access.toggle(player.uniqueId,rankId,permission)) }
                 catch (_: Exception) { player.sendMessage(FrontierTheme.message("Ranks","Could not save permissions. Previous access retained.")) }
             }
         }
-        management.forEachIndexed { i,permission ->
+        if (!territory) management.forEachIndexed { i,permission ->
             val enabled = permission in target.permissions
-            button(pane,27+i,if(enabled) Material.YELLOW_DYE else Material.GRAY_DYE,
-                permission.name.lowercase().replace('_',' '),listOf("Guild authority: ${if(enabled) "allowed" else "denied"}","Click to toggle.")) {
+            button(pane,9+i,if(enabled) Material.YELLOW_DYE else Material.GRAY_DYE,
+                permission.name.lowercase().replace('_',' ').replaceFirstChar { it.titlecase() },listOf(guildDescription(permission), "", "Status: ${if(enabled) "Allowed" else "Denied"}","Click to toggle. Changes save immediately.")) {
                 val fresh = ranks.getRank(rankId)
                 if (fresh == null || fresh.priority == 0) feedback(false)
                 else feedback(if(permission in fresh.permissions) ranks.removeRankPermission(rankId,permission,player.uniqueId)
@@ -86,5 +88,41 @@ object FrontierRanksMenu : KoinComponent {
         }
         button(pane,49,Material.ARROW,"Back to ranks",emptyList()) { open(player) }
         gui.show(player)
+    }
+
+    private fun claimDescription(permission: ClaimPermission): String = when(permission) {
+        ClaimPermission.BUILD -> "Place and break blocks in guild territory."
+        ClaimPermission.HARVEST -> "Harvest and replant crops."
+        ClaimPermission.CONTAINER -> "Open ordinary chests and other containers."
+        ClaimPermission.DISPLAY -> "Add or remove items from display blocks."
+        ClaimPermission.VEHICLE -> "Place and destroy boats and minecarts."
+        ClaimPermission.SIGN -> "Edit text on signs."
+        ClaimPermission.REDSTONE -> "Use buttons, levers and redstone controls."
+        ClaimPermission.DOOR -> "Open doors, trapdoors and gates."
+        ClaimPermission.TRADE -> "Trade with villagers and wandering traders."
+        ClaimPermission.HUSBANDRY -> "Interact with and care for passive animals."
+        ClaimPermission.DETONATE -> "Ignite explosives; raid rules still apply."
+        ClaimPermission.EVENT -> "Trigger events caused by omen effects."
+        ClaimPermission.SLEEP -> "Sleep in beds in guild territory."
+        ClaimPermission.VIEW -> "View interactable blocks without editing them."
+    }
+    private fun guildDescription(permission: RankPermission): String = when(permission) {
+        RankPermission.MANAGE_RANKS -> "Edit lower ranks; cannot grant access you lack."
+        RankPermission.MANAGE_MEMBERS -> "Manage guild membership within rank limits."
+        RankPermission.MANAGE_PERMISSIONS -> "Edit lower ranks' territory access."
+        RankPermission.MANAGE_CLAIMS -> "Claim, unclaim and name guild territory."
+        RankPermission.MANAGE_HOME -> "Set the guild's shared home."
+        RankPermission.MANAGE_RELATIONS -> "Manage allies, enemies and diplomacy."
+        RankPermission.DECLARE_WAR -> "Declare wars against other guilds."
+        RankPermission.PLACE_WAR_BANNER -> "Place a raid-window rally banner; limits apply."
+        RankPermission.ACCESS_VAULT -> "Open the shared Founding Vault inventory."
+        RankPermission.DEPOSIT_TO_VAULT -> "Put items into the shared vault."
+        RankPermission.WITHDRAW_FROM_VAULT -> "Take items out of the shared vault."
+        RankPermission.PLACE_VAULT -> "Establish the guild's single Founding Vault."
+        RankPermission.BREAK_VAULT -> "Pack the vault after confirming loss of all land."
+        RankPermission.MANAGE_VAULT -> "Manage vault storage, including deposits and withdrawals."
+        RankPermission.MANAGE_DESCRIPTION -> "Change the guild's public description."
+        RankPermission.MANAGE_BANNER -> "Change the guild's banner design."
+        else -> "Manage this guild capability within rank limits."
     }
 }

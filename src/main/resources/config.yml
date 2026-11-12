@@ -67,6 +67,8 @@ frontier:
   # Public server land in frontier.world.name. Inclusive chunk bounds; restart after edits.
   # Reserves land only: building, containers, PvP and TNT remain available.
   server_territory:
+    # Expand reservation to the full random spawn circle (chunk-aligned square).
+    cover_spawn_radius: true
     enabled: true
     name: "Watcher's Ruin"
     min_chunk_x: -8

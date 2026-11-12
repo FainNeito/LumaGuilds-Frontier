@@ -40,7 +40,7 @@ class FrontierServerRules(private val config: FrontierConfig, private val openMe
     companion object {
         val bannedItems = setOf(Material.END_CRYSTAL, Material.ELYTRA, Material.RESPAWN_ANCHOR, Material.MACE)
         val guildCommands = setOf("war", "ranks", "warbanner", "home", "sethome", "menu", "help", "start", "gettingstarted", "create", "rename", "invite", "join", "accept", "decline", "invites",
-            "kick", "leave", "disband", "transfer", "tag", "description", "desc", "info", "getvault", "chat", "notify", "notifications")
+            "kick", "leave", "disband", "transfer", "tag", "description", "desc", "info", "getvault", "vault", "allychat", "chat", "notify", "notifications")
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
@@ -244,7 +244,13 @@ class FrontierServerRules(private val config: FrontierConfig, private val openMe
 
     @EventHandler(priority = EventPriority.HIGH)
     fun onFirstSpawn(event: PlayerSpawnLocationEvent) {
-        if (!event.player.hasPlayedBefore() || onRoof(event.spawnLocation)) spawn()?.let { event.spawnLocation = it }
+        // Configuration-stage legacy players may not have loaded their persisted history yet.
+        if (onRoof(event.spawnLocation)) spawn()?.let { event.spawnLocation = it }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    fun onFirstJoin(event: org.bukkit.event.player.PlayerJoinEvent) {
+        if (!event.player.hasPlayedBefore()) spawn()?.let { event.player.teleport(it) }
     }
 
     @EventHandler(priority = EventPriority.HIGH)

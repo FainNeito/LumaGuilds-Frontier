@@ -2497,6 +2497,10 @@ class GuildCommand : BaseCommand(), KoinComponent {
     @Subcommand("getvault")
     @CommandPermission("lumaguilds.guild.getvault")
     fun onVaultGet(player: Player) {
+        if (configService.loadConfig().frontier.enabled) {
+            player.sendMessage(FrontierTheme.message("Vault", "Each guild has one Founding Vault. Use /claim to preview and confirm your founding chunk; expand from there without extra vaults."))
+            return
+        }
         val playerId = player.uniqueId
 
         // Check if physical vault is enabled in config
@@ -2630,6 +2634,23 @@ class GuildCommand : BaseCommand(), KoinComponent {
 
         val guild = guilds.first()
 
+        if (configService.loadConfig().frontier.enabled) {
+            if (net.lumalyte.lg.utils.CombatUtil.isInCombat(player)) {
+                player.sendMessage(net.lumalyte.lg.interaction.listeners.FrontierTheme.message("Vault", "You cannot open your guild vault while in combat.", true))
+                return
+            }
+            val koin = org.koin.core.context.GlobalContext.get()
+            val partitions = koin.get<net.lumalyte.lg.application.persistence.PartitionRepository>()
+            val claims = koin.get<net.lumalyte.lg.application.persistence.ClaimRepository>()
+            val location = player.location
+            val ownTerritory = net.lumalyte.lg.application.services.FrontierVaultAccess(claims,partitions).allowed(
+                guild.id, location.world.uid, net.lumalyte.lg.domain.values.Position3D(location.blockX,location.blockY,location.blockZ), false)
+            if (!ownTerritory) {
+                player.sendMessage(net.lumalyte.lg.interaction.listeners.FrontierTheme.message("Vault", "Stand inside your own guild's claim to open its vault.", true))
+                return
+            }
+        }
+
         // Check if vault is available
         if (guild.vaultStatus != net.lumalyte.lg.domain.entities.VaultStatus.AVAILABLE) {
             player.sendFrontierMessage(lang.msg("command.migrated.guild.vault.vault_unavailable"))
@@ -2663,7 +2684,7 @@ class GuildCommand : BaseCommand(), KoinComponent {
             is net.lumalyte.lg.application.services.VaultResult.Success -> {
                 player.sendFrontierMessage(lang.msg("command.migrated.guild.vault.vault_opened"))
                 player.sendFrontierMessage(lang.msg("command.migrated.guild.vault.accessing_s_vault", "guild" to guild.name))
-                player.playFrontierSound(player.location, org.bukkit.Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f)
+                player.playSound(player.location, org.bukkit.Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f)
             }
             is net.lumalyte.lg.application.services.VaultResult.Failure -> {
                 player.sendFrontierMessage(lang.msg("command.migrated.guild.vault.failed"))

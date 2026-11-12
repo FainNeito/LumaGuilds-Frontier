@@ -123,6 +123,14 @@ class FrontierAlertListener(
             (from.blockZ shr 4) == (to.blockZ shr 4)) return
         val claim = claimAt(to)
         val publicTerritory = publicTerritoryAt(to)
+        val previous = claimAt(from)
+        val sameOwner = previous != null && claim != null && previous.teamId == claim.teamId &&
+            (claim.teamId != null || previous.playerId == claim.playerId)
+        if (previous != null && !sameOwner)
+            event.player.sendMessage(FrontierTheme.message("Claim", "Leaving ${previous.name}."))
+        val previousPublic = publicTerritoryAt(from)
+        if (previousPublic != null && publicTerritory == null)
+            event.player.sendMessage(FrontierTheme.message("Territory", "Leaving ${previousPublic.name}."))
         if (claim == null && publicTerritory != null) {
             if (publicTerritoryAt(from) == null) {
                 FrontierFeedback.show(event.player,"claim-enter",publicTerritory.name,"Server territory · Open to everyone",title=config.claimTitles)
@@ -131,9 +139,7 @@ class FrontierAlertListener(
             return
         }
         if (claim == null) return
-        val previous = claimAt(from)
-        if (previous != null && previous.teamId == claim.teamId &&
-            (claim.teamId != null || previous.playerId == claim.playerId)) return
+        if (sameOwner) return
         run {
             val owner = claim.teamId?.let { guilds.getGuild(it)?.name }
                 ?: (org.bukkit.Bukkit.getOfflinePlayer(claim.playerId).name ?: "Solo claim")
