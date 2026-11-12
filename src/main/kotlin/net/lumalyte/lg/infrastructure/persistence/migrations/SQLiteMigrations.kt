@@ -1500,8 +1500,8 @@ class SQLiteMigrations(private val plugin: JavaPlugin, private val connection: C
         if (claimsEnabled) {
             requiredTables.addAll(
                 listOf(
-                    "claims", "claim_partitions", "claim_flags", "claim_permissions",
-                    "player_access", ClaimTransferRequestSchema.TABLE,
+                    "claims", "claim_partitions", "claim_flags", "claim_default_permissions",
+                    "claim_player_permissions", ClaimTransferRequestSchema.TABLE,
                 )
             )
         }
@@ -1591,7 +1591,7 @@ class SQLiteMigrations(private val plugin: JavaPlugin, private val connection: C
                 GuildHomeActivationSchema.create(connection, mariaDb = false)
             }
             // Recreate claim tables if missing (only checked when claims enabled)
-            if (claimsEnabled && missingTables.any { it in listOf("claims", "claim_partitions", "claim_flags", "claim_permissions", "player_access") }) {
+            if (claimsEnabled && missingTables.any { it in listOf("claims", "claim_partitions", "claim_flags", "claim_default_permissions", "claim_player_permissions") }) {
                 migrateToVersion2()
                 componentLogger.info(Component.text("✓ Recreated claim system tables"))
             }

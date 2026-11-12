@@ -14,7 +14,6 @@ import org.bukkit.event.inventory.PrepareItemCraftEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerRespawnEvent
 import org.bukkit.event.world.WorldLoadEvent
-import org.spigotmc.event.player.PlayerSpawnLocationEvent
 import java.util.concurrent.ThreadLocalRandom
 
 /** Registered only on the isolated Frontier profile. Items are denied, not deleted. */
@@ -39,7 +38,7 @@ class FrontierServerRules(private val config: FrontierConfig, private val openMe
     var warAction: (Player) -> Unit = {}
     companion object {
         val bannedItems = setOf(Material.END_CRYSTAL, Material.ELYTRA, Material.RESPAWN_ANCHOR, Material.MACE)
-        val guildCommands = setOf("war", "ranks", "warbanner", "home", "sethome", "menu", "help", "start", "gettingstarted", "create", "rename", "invite", "join", "accept", "decline", "invites",
+        val guildCommands = setOf("war", "ranks", "warbanner", "home", "sethome", "menu", "help", "create", "rename", "invite", "join", "accept", "decline", "invites",
             "kick", "leave", "disband", "transfer", "tag", "description", "desc", "info", "getvault", "vault", "allychat", "chat", "notify", "notifications")
     }
 
@@ -68,7 +67,7 @@ class FrontierServerRules(private val config: FrontierConfig, private val openMe
             else homeAction(event.player, words[1] == "sethome")
             return
         }
-        if (root in setOf("g", "guild", "guilds") && (words.getOrNull(1).isNullOrBlank() || words.getOrNull(1) in setOf("menu", "help", "start", "gettingstarted"))) {
+        if (root in setOf("g", "guild", "guilds") && (words.getOrNull(1).isNullOrBlank() || words.getOrNull(1) in setOf("menu", "help"))) {
             event.isCancelled = true
             if (event.player.hasPermission("lumaguilds.guild.menu")) openMenu(event.player)
             else event.player.sendMessage(FrontierTheme.message("Guild", "You do not have permission to open this menu.", true))
@@ -243,14 +242,10 @@ class FrontierServerRules(private val config: FrontierConfig, private val openMe
     }
 
     @EventHandler(priority = EventPriority.HIGH)
-    fun onFirstSpawn(event: PlayerSpawnLocationEvent) {
-        // Configuration-stage legacy players may not have loaded their persisted history yet.
-        if (onRoof(event.spawnLocation)) spawn()?.let { event.spawnLocation = it }
-    }
-
-    @EventHandler(priority = EventPriority.HIGH)
     fun onFirstJoin(event: org.bukkit.event.player.PlayerJoinEvent) {
-        if (!event.player.hasPlayedBefore()) spawn()?.let { event.player.teleport(it) }
+        // Player data is loaded here, and terrain access stays on the server thread.
+        if (!event.player.hasPlayedBefore() || onRoof(event.player.location))
+            spawn()?.let { event.player.teleport(it) }
     }
 
     @EventHandler(priority = EventPriority.HIGH)
