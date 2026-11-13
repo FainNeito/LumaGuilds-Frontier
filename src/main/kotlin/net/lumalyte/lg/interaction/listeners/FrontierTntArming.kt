@@ -12,6 +12,13 @@ import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.block.TNTPrimeEvent
+import org.bukkit.event.block.Action
+import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.block.BlockFace
+import org.bukkit.block.data.Powerable
+import org.bukkit.block.data.type.RedstoneWire
+import org.bukkit.block.data.type.Repeater
+import org.bukkit.event.Event
 import org.bukkit.event.entity.EntitySpawnEvent
 import org.bukkit.plugin.java.JavaPlugin
 import java.time.Instant
@@ -19,13 +26,22 @@ import java.util.UUID
 
 internal data class FrontierTntBlock(val world: UUID, val x: Int, val y: Int, val z: Int)
 internal class FrontierTntArmingRegistry {
-    private data class Entry(val owner: UUID, val expires: Long)
+    private data class Entry(val owner: UUID?, val expires: Long)
     private val entries = mutableMapOf<FrontierTntBlock, Entry>()
     fun arm(block: FrontierTntBlock, owner: UUID, now: Long, lifetime: Long): Boolean {
         val existing = entries[block]
         if (existing != null && now < existing.expires && existing.owner != owner) return false
         entries[block] = Entry(owner, now + lifetime)
         return true
+    }
+    fun armAutomatic(block: FrontierTntBlock, owner: UUID, now: Long, lifetime: Long): Boolean {
+        val existing=entries[block]
+        if (existing != null && now < existing.expires && existing.owner != owner) {
+            // Two plausible operators are ambiguous; do not credit either player.
+            entries[block]=Entry(null, maxOf(existing.expires,now+lifetime))
+            return false
+        }
+        return arm(block,owner,now,lifetime)
     }
     fun consume(block: FrontierTntBlock, now: Long): UUID? = entries.remove(block)?.takeIf { now < it.expires }?.owner
     fun remove(block: FrontierTntBlock) { entries.remove(block) }
@@ -40,6 +56,55 @@ internal class FrontierTntArming(private val plugin: JavaPlugin, private val con
     private val pending = mutableMapOf<FrontierTntBlock, Pending>()
     private fun key(block: Block) = FrontierTntBlock(block.world.uid, block.x, block.y, block.z)
     private fun tell(player: Player, message: String) = player.sendMessage(FrontierTheme.message("Raid", message))
+    private val horizontal = listOf(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST)
+
+    /** Trace a bounded, loaded redstone path. Never claim TNT merely because it is nearby. */
+    private fun circuit(control: Block): Set<Block>? {
+        val world = control.world
+        fun at(block: Block, face: BlockFace): Block? {
+            val x=block.x+face.modX; val y=block.y+face.modY; val z=block.z+face.modZ
+            if (kotlin.math.abs(x-control.x)>64 || kotlin.math.abs(y-control.y)>64 || kotlin.math.abs(z-control.z)>64) return null
+            if (!world.isChunkLoaded(x shr 4,z shr 4)) return null
+            return world.getBlockAt(x,y,z)
+        }
+        fun output(node: Block): Iterable<Block> {
+            val out=mutableSetOf<Block>()
+            val data=node.blockData
+            // Redstone dust powers its supporting solid block, which can power adjacent TNT.
+            if (data is RedstoneWire) {
+                val below=at(node,BlockFace.DOWN)
+                if (below?.type == Material.TNT) out.add(below)
+                if (below != null && !below.type.isAir && below.type.isOccluding) for (face in horizontal) {
+                    at(below,face)?.takeIf { it.type == Material.TNT }?.let(out::add)
+                }
+            }
+            for (face in horizontal) {
+                if (data is RedstoneWire && data.getFace(face) == RedstoneWire.Connection.NONE) continue
+                if (data is Repeater && face != data.facing.oppositeFace) continue
+                val neighbor=at(node,face) ?: continue
+                if (neighbor.type == Material.TNT) { out.add(neighbor); continue }
+                val other=neighbor.blockData
+                when (other) {
+                    is RedstoneWire -> if (other.getFace(face.oppositeFace) != RedstoneWire.Connection.NONE) out.add(neighbor)
+                    is Repeater -> if (other.facing == face.oppositeFace) out.add(neighbor)
+                }
+            }
+            return out
+        }
+        return FrontierCircuitTrace.find(control,1024,::output) { it.type == Material.TNT }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun activate(event: PlayerInteractEvent) {
+        if (event.action != Action.RIGHT_CLICK_BLOCK || event.useInteractedBlock() == Event.Result.DENY) return
+        val block=event.clickedBlock ?: return
+        if (block.type != Material.LEVER && !block.type.name.endsWith("_BUTTON")) return
+        val power=block.blockData as? Powerable ?: return
+        if (power.isPowered || !config.schedule.stateAt(Instant.now()).active) return
+        val tnt=circuit(block) ?: return
+        val now=System.currentTimeMillis(); registry.prune(now)
+        tnt.forEach { registry.armAutomatic(key(it),event.player.uniqueId,now,60_000) }
+    }
     fun start() {
         plugin.server.pluginManager.registerEvents(this, plugin)
         plugin.getCommand("raidarm")?.setExecutor { sender, _, _, _ ->
