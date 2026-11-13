@@ -1043,6 +1043,10 @@ class LumaGuilds : JavaPlugin() {
             val combatScores = net.lumalyte.lg.infrastructure.services.FrontierCombatLeaderboard(dataFolder.resolve("frontier-combat-leaderboards.yml"))
             net.lumalyte.lg.interaction.menus.guild.FrontierCombatBoards(this,combatScores,get().get(),get().get()).start()
             objectiveListener.vaultCredit = combatScores::vault
+            val vaultLossNotifications = net.lumalyte.lg.interaction.listeners.FrontierVaultLossNotifications(
+                this, get().get(), net.lumalyte.lg.infrastructure.services.FrontierVaultLossInbox(dataFolder.resolve("frontier-vault-loss-inbox.yml")))
+            objectiveListener.vaultLossNotifications = vaultLossNotifications
+            server.pluginManager.registerEvents(vaultLossNotifications, this)
             val frontierWars = net.lumalyte.lg.infrastructure.services.FrontierWars(
                 dataFolder.resolve("frontier-wars.yml"),frontierConfig,get().get(),get().get(),get().get(),get().get(),
                 { war, message ->
@@ -1065,6 +1069,7 @@ class LumaGuilds : JavaPlugin() {
                 try { frontierWars.tick() } catch(failure: Exception) { logger.log(java.util.logging.Level.SEVERE,"Frontier war reconciliation pending",failure) }
             },40L,20L)
             server.pluginManager.registerEvents(objectiveListener, this)
+            net.lumalyte.lg.interaction.listeners.FrontierTntArming(this, frontierConfig).start()
             val raidMining = net.lumalyte.lg.interaction.listeners.FrontierRaidMining(this, frontierConfig, get().get(), get().get(), get().get(), raidClaims)
             server.pluginManager.registerEvents(raidMining, this)
             raidMining.start()
@@ -1093,6 +1098,7 @@ class LumaGuilds : JavaPlugin() {
                 frontierConfig.serverTerritory?.let { tell("${it.name} is public server territory around spawn. Building and PvP are allowed; claiming is disabled.") }
                 tell("Use /claim help for territory commands and /raidinfo for the daily raid schedule (${frontierConfig.schedule.zone}).")
                 tell("During raids, attackers can destroy claims' Founding Vaults. TNT is encouraged; withers are disabled.")
+                tell("During a raid, use /raidarm near your loaded TNT cannon, then fire within 60 seconds. Unarmed TNT cannot damage vaults.")
                 tell("Overworld claims only; Nether travel is 1:1. Elytra, end crystals, respawn anchors, maces and totems are disabled.")
                 tell("One shared guild home (/guildhome, /setguildhome); /home and /sethome use the same destination. Homes are unavailable during raids or combat.")
                 if (living.settings.getBoolean("decay.enabled", false)) tell("Territories lose protection after ${living.settings.getLong("decay.inactive-days", 14).coerceIn(1,3650)} inactive days. Current members' movement or interaction renews activity; builds and items remain.")

@@ -26,6 +26,7 @@ class FrontierObjectiveListener(
     private val partitions: net.lumalyte.lg.application.persistence.PartitionRepository? = null,
 ) : Listener {
     var raidNotifications: FrontierRaidNotifications? = null
+    var vaultLossNotifications: FrontierVaultLossNotifications? = null
     var frontierWars: net.lumalyte.lg.infrastructure.services.FrontierWars? = null
     var vaultCredit: ((java.util.UUID, java.util.UUID) -> Unit)? = null
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -85,6 +86,8 @@ class FrontierObjectiveListener(
     }
 
     private fun fallen(owner: FrontierOwner, name: String, attacker: org.bukkit.entity.Player?) {
+        if (owner.type == FrontierOwnerType.GUILD)
+            vaultLossNotifications?.record(owner.id, name, attacker?.name)
         frontierWars?.vaultFallen(owner,attacker?.let { members.getPlayerGuilds(it.uniqueId) } ?: emptySet())
         raidNotifications?.notify(owner, "defeat", "Your Frontier Founding Vault was destroyed. All territory claims have fallen.")
         plugin.server.onlinePlayers.filter { defending(it, owner) }.forEach {
@@ -125,12 +128,12 @@ class FrontierObjectiveListener(
             val owner = objectiveOwner(block)
             if (owner != null) {
                 blocks.remove(block) // Never allow vanilla destruction to bypass durable claim loss.
-                if (tnt && active && !(config.frontier.guildOnlyClaims && owner.type == FrontierOwnerType.PERSONAL)) {
+                if (tnt && active && attacker != null && !(config.frontier.guildOnlyClaims && owner.type == FrontierOwnerType.PERSONAL)) {
                     try {
                         val name = vaults.getGuildForVaultChest(block.location)?.name ?: claimAt(block)?.name ?: "Solo territory"
-                        val result = objectives.siege.hit(owner,FrontierObjectives.key(block.location),false,now,
+                        val result = objectives.siege.hit(owner,FrontierObjectives.key(block.location),defending(attacker, owner),now,
                             minOf(config.frontier.tntVaultDamage,config.frontier.requiredHits))
-                        if (result is FrontierSiegeResult.Progress) underAttack(owner, attacker?.name ?: "TNT")
+                        if (result is FrontierSiegeResult.Progress) underAttack(owner, attacker.name)
                         if (result == FrontierSiegeResult.Defeated) fallen(owner, name, attacker)
                     } catch (failure: Exception) { plugin.logger.log(Level.SEVERE,"TNT objective cleanup pending",failure) }
                 }
