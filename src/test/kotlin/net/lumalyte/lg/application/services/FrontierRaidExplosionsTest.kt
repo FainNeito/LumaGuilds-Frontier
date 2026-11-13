@@ -75,11 +75,30 @@ class FrontierRaidExplosionsTest {
     }
     @Test fun `TNT hits exposed vault through siege instead of vanilla destruction`() {
         val guild=Guild(UUID.randomUUID(),"Keepers",createdAt=Instant.now())
+        val attacker=mockk<Player>(relaxed=true)
+        every { members.getMember(any(),guild.id) } returns null
         every { block.type } returns Material.CHEST
         every { vaults.getGuildForVaultChest(location) } returns guild
         every { objectives.siege.hit(any(),any(),false,any(),4) } returns FrontierSiegeResult.Progress(4,20)
-        assertTrue(explode(mockk<TNTPrimed> { every { source } returns null }).isEmpty())
+        assertTrue(explode(mockk<TNTPrimed> { every { source } returns attacker }).isEmpty())
         verify(exactly=1) { objectives.siege.hit(FrontierOwner(FrontierOwnerType.GUILD,guild.id),any(),false,any(),4) }
         verify(exactly=0) { vaults.removeVaultChest(any(),any()) }
+    }
+    @Test fun `unattributed TNT cannot damage a vault`() {
+        val guild=Guild(UUID.randomUUID(),"Keepers",createdAt=Instant.now())
+        every { block.type } returns Material.CHEST
+        every { vaults.getGuildForVaultChest(location) } returns guild
+        assertTrue(explode(mockk<TNTPrimed> { every { source } returns null }).isEmpty())
+        verify(exactly=0) { objectives.siege.hit(any(),any(),any(),any(),any()) }
+    }
+    @Test fun `defender sourced TNT is treated as a defender hit`() {
+        val guild=Guild(UUID.randomUUID(),"Keepers",createdAt=Instant.now())
+        val player=mockk<Player> { every { uniqueId } returns UUID.randomUUID() }
+        every { block.type } returns Material.CHEST
+        every { vaults.getGuildForVaultChest(location) } returns guild
+        every { members.getMember(player.uniqueId,guild.id) } returns mockk(relaxed=true)
+        every { objectives.siege.hit(any(),any(),true,any(),4) } returns FrontierSiegeResult.Defender
+        assertTrue(explode(mockk<TNTPrimed> { every { source } returns player }).isEmpty())
+        verify(exactly=1) { objectives.siege.hit(FrontierOwner(FrontierOwnerType.GUILD,guild.id),any(),true,any(),4) }
     }
 }

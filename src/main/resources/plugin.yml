@@ -42,6 +42,9 @@ commands:
   frontiertop:
     description: View Frontier combat leaderboards
     usage: /frontiertop
+  raidarm:
+    description: Arm nearby TNT for a Frontier raid
+    usage: /raidarm
   vaultpickup:
     description: Pack your Founding Vault and surrender ALL territory claims
   raidinfo:
