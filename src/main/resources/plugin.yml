@@ -38,7 +38,10 @@ commands:
     description: Cancel your Frontier chunk preview
   claimoutline:
     aliases: [guildoutline]
-    description: Show nearby guild claim borders
+    description: Toggle nearby guild claim borders
+  frontiertop:
+    description: View Frontier combat leaderboards
+    usage: /frontiertop
   vaultpickup:
     description: Pack your Founding Vault and surrender ALL territory claims
   raidinfo:

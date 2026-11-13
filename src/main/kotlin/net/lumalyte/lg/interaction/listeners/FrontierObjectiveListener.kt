@@ -27,6 +27,7 @@ class FrontierObjectiveListener(
 ) : Listener {
     var raidNotifications: FrontierRaidNotifications? = null
     var frontierWars: net.lumalyte.lg.infrastructure.services.FrontierWars? = null
+    var vaultCredit: ((java.util.UUID, java.util.UUID) -> Unit)? = null
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onBreak(event: BlockBreakEvent) {
         val block = event.block
@@ -94,6 +95,10 @@ class FrontierObjectiveListener(
         // TNT without a player source still causes defeat, but never invents a winning guild.
         if (attacker == null || defending(attacker, owner)) return
         val attackingGuilds = members.getPlayerGuilds(attacker.uniqueId)
+        if (owner.type == FrontierOwnerType.GUILD && attackingGuilds.size == 1) {
+            try { vaultCredit?.invoke(attackingGuilds.single(), owner.id) }
+            catch (failure: Exception) { plugin.logger.log(Level.SEVERE, "Could not record vault leaderboard score", failure) }
+        }
         plugin.server.onlinePlayers.filter { !defending(it, owner) &&
             (it.uniqueId == attacker.uniqueId || members.getPlayerGuilds(it.uniqueId).any(attackingGuilds::contains))
         }.forEach {

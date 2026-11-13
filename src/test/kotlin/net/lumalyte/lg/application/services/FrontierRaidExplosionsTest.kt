@@ -47,6 +47,23 @@ class FrontierRaidExplosionsTest {
         return list
     }
     @Test fun `TNT damages ordinary claim blocks during raids`() { assertEquals(listOf(block),explode(mockk<TNTPrimed> { every { source } returns null })) }
+    @Test fun `outside raid TNT cannot damage ordinary claims or the vault`() {
+        val closedConfig=MainConfig(frontier=FrontierConfig(enabled=true,schedule=FrontierRaidSchedule(ZoneOffset.UTC,
+            LocalTime.now(ZoneOffset.UTC).plusHours(2),Duration.ofMinutes(30))))
+        val closed=FrontierObjectiveListener(objectives,claims,vaults,members,plugin,closedConfig,partitions)
+        val tnt=mockk<TNTPrimed> { every { source } returns null }
+        val blocks=mutableListOf(block)
+        val event=mockk<EntityExplodeEvent> { every { entity } returns tnt; every { blockList() } returns blocks }
+        closed.onEntityExplosion(event)
+        assertTrue(blocks.isEmpty())
+        val guild=Guild(UUID.randomUUID(),"Keepers",createdAt=Instant.now())
+        every { block.type } returns Material.CHEST
+        every { vaults.getGuildForVaultChest(location) } returns guild
+        blocks.add(block)
+        closed.onEntityExplosion(event)
+        assertTrue(blocks.isEmpty())
+        verify(exactly=0) { objectives.siege.hit(any(),any(),any(),any(),any()) }
+    }
     @Test fun `wither and skull explosions cannot damage claimed terrain even during raids`() {
         assertTrue(explode(mockk<Wither>()).isEmpty()); assertTrue(explode(mockk<WitherSkull>()).isEmpty())
         verify(exactly=0) { objectives.siege.hit(any(),any(),any(),any(),any()) }

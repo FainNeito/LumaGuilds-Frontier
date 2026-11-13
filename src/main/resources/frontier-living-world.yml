@@ -15,7 +15,8 @@ combat:
 discord:
   enabled: false
 diplomacy:
-  max-allies: 1
+  # Set to 0 to disable new alliances; existing alliances are not removed.
+  max-allies: 0
 
 # Restart the server after editing. Includes the owner and offline members.
 # Existing oversized guilds keep their members but cannot recruit above this cap.

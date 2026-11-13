@@ -30,6 +30,7 @@ internal data class GuildDialogItem(
     val onClick: GuildDialogAction? = null,
     val rightLines: List<Component>? = null,
     val section: Component? = null,
+    val descriptionWidth: Int = GUILD_DIALOG_ITEM_DESCRIPTION_WIDTH,
 )
 
 internal data class GuildDialogAction(val label: Component, val tooltip: Component, val action: () -> Unit) {
@@ -216,14 +217,14 @@ internal class GuildMenuDialog : GuildDialogPresenter {
                 ?: Component.join(net.kyori.adventure.text.JoinConfiguration.newlines(), lines + item.rightLines)
             val row = DialogBody.item(item.item.clone()).width(ITEM_WIDTH).height(ITEM_HEIGHT)
                 .showDecorations(false).showTooltip(false)
-                .description(DialogBody.plainMessage(linked(panel), GUILD_DIALOG_ITEM_DESCRIPTION_WIDTH)).build()
+                .description(DialogBody.plainMessage(linked(panel), item.descriptionWidth)).build()
             return listOfNotNull(item.section?.let { DialogBody.plainMessage(it, TEXT_WIDTH) }, row)
         }
         if (skin != null && !lines.isNullOrEmpty()) {
             val heading =
                 DialogBody.item(item.item.clone()).width(ITEM_WIDTH).height(ITEM_HEIGHT)
                     .showDecorations(false).showTooltip(false)
-                    .description(DialogBody.plainMessage(linked(lines.first()), GUILD_DIALOG_ITEM_DESCRIPTION_WIDTH))
+                    .description(DialogBody.plainMessage(linked(lines.first()), item.descriptionWidth))
                     .build()
             val content = lines.drop(1)
             if (content.isEmpty()) return listOf(heading)
@@ -235,7 +236,7 @@ internal class GuildMenuDialog : GuildDialogPresenter {
         return listOf(
             DialogBody.item(item.item.clone()).width(ITEM_WIDTH).height(ITEM_HEIGHT)
                 .showDecorations(false).showTooltip(false)
-                .description(DialogBody.plainMessage(linked(item.text), GUILD_DIALOG_ITEM_DESCRIPTION_WIDTH))
+                .description(DialogBody.plainMessage(linked(item.text), item.descriptionWidth))
                 .build(),
         )
     }

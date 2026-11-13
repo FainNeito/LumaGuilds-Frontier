@@ -977,6 +977,8 @@ class LumaGuilds : JavaPlugin() {
             rules.ranksAction = { player -> net.lumalyte.lg.interaction.menus.guild.FrontierRanksMenu.open(player) }
             rules.warAction = { player -> net.lumalyte.lg.interaction.menus.guild.FrontierWarMenu.open(player) }
             server.pluginManager.registerEvents(rules, this)
+            server.pluginManager.registerEvents(net.lumalyte.lg.interaction.listeners.FrontierPortalProtection(
+                frontierConfig, get().get(), get().get(), get().get()), this)
             server.worlds.forEach { rules.removeWithers(it.entities) }
             frontierConfig.serverTerritory?.let { territory ->
                 val repository = get().get<net.lumalyte.lg.application.persistence.ClaimRepository>()
@@ -1038,6 +1040,9 @@ class LumaGuilds : JavaPlugin() {
             }, 1L, 200L)
             val objectiveListener = net.lumalyte.lg.interaction.listeners.FrontierObjectiveListener(
                 objectives, get().get(), get().get(), get().get(), this, get().get(), get().get())
+            val combatScores = net.lumalyte.lg.infrastructure.services.FrontierCombatLeaderboard(dataFolder.resolve("frontier-combat-leaderboards.yml"))
+            net.lumalyte.lg.interaction.menus.guild.FrontierCombatBoards(this,combatScores,get().get(),get().get()).start()
+            objectiveListener.vaultCredit = combatScores::vault
             val frontierWars = net.lumalyte.lg.infrastructure.services.FrontierWars(
                 dataFolder.resolve("frontier-wars.yml"),frontierConfig,get().get(),get().get(),get().get(),get().get(),
                 { war, message ->
@@ -1069,7 +1074,7 @@ class LumaGuilds : JavaPlugin() {
             alerts.start()
             val living = net.lumalyte.lg.interaction.listeners.FrontierLivingWorld(this)
             (get().get<net.lumalyte.lg.application.services.RelationService>() as net.lumalyte.lg.infrastructure.services.RelationServiceBukkit).allianceLimit =
-                living.settings.getInt("diplomacy.max-allies",1).coerceIn(0,20)
+                living.settings.getInt("diplomacy.max-allies",0).coerceIn(0,20)
             (get().get<net.lumalyte.lg.application.services.MemberService>() as net.lumalyte.lg.infrastructure.services.MemberServiceBukkit).apply {
                 frontierMemberLimit = living.settings.getInt("guilds.max-members",6).coerceIn(1,100)
                 frontierRosterLocked = {
