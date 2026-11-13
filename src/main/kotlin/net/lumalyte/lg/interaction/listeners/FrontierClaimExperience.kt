@@ -73,10 +73,7 @@ class FrontierClaimExperience(
         }
         command("claimconfirm") { player, _ -> confirm(player) }
         command("claimcancel") { player, _ -> previews.remove(player.uniqueId); tell(player, "Preview cancelled. No claim was created.") }
-        command("claimoutline") { player, _ ->
-            outlines[player.uniqueId] = clock().plusSeconds(60)
-            tell(player, "Showing your nearby guild claim borders for 60 seconds.")
-        }
+        command("claimoutline") { player, _ -> toggleOutline(player) }
         command("vaultpickup") { player, args -> pickup(player, args.singleOrNull() == "confirm-unclaim-all") }
         command("unclaim") { player, args -> unclaim(player,args.singleOrNull() ?: "") }
         command("autoclaim") { player, args -> autoclaim(player,args.singleOrNull() ?: "") }
@@ -113,6 +110,17 @@ class FrontierClaimExperience(
 
     private fun tell(player: Player, text: String) = player.sendMessage(FrontierTheme.message("Claim", text))
 
+    private fun toggleOutline(player: Player) {
+        val now = clock()
+        val expires = outlines.remove(player.uniqueId)
+        if (expires != null && now < expires) {
+            tell(player, "Claim borders hidden.")
+        } else {
+            outlines[player.uniqueId] = now.plusSeconds(60)
+            tell(player, "Showing your nearby guild claim borders for 60 seconds. Use /claim outline again to hide them.")
+        }
+    }
+
     private val territory = FrontierTerritory(claims, partitions)
     private val soloKey get() = NamespacedKey(plugin, "frontier_solo_vault")
 
@@ -131,7 +139,7 @@ class FrontierClaimExperience(
             "migrate" -> { migrate(player,text.substringAfter(' ',"")); return }
             "help" -> {
                 tell(player, "Use /claim to preview, /claimconfirm to claim, or /claim cancel to cancel.")
-                tell(player, "Use /claim outline for borders; /claim rename <name> names your whole territory.")
+                tell(player, "Use /claim outline to show or hide borders; /claim rename <name> names your whole territory.")
                 tell(player, "Use /autoclaim to preview automatic claiming; /unclaim for chunk removal.")
                 tell(player, "Expand around your Founding Vault. Picking it up requires confirmation and releases ALL claims.")
                 tell(player, "Claims are overworld-only. Use /raidinfo for raid times and /serverinfo for survival rules.")
@@ -139,7 +147,7 @@ class FrontierClaimExperience(
             }
             "confirm" -> { confirm(player); return }
             "cancel" -> { previews.remove(player.uniqueId); tell(player, "Preview cancelled."); return }
-            "outline" -> { outlines[player.uniqueId] = clock().plusSeconds(60); tell(player, "Showing territory borders for 60 seconds."); return }
+            "outline" -> { toggleOutline(player); return }
             "auto" -> { autoclaim(player,text.substringAfter(' ',"")); return }
             "unclaim" -> { unclaim(player,text.substringAfter(' ',"")); return }
             "rename" -> {

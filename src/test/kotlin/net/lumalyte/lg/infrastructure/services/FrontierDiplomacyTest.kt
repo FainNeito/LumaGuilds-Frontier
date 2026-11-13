@@ -9,6 +9,19 @@ import java.util.UUID
 import kotlin.test.*
 
 class FrontierDiplomacyTest {
+    @Test fun `zero alliance limit blocks requests and pending acceptance`() {
+        val first=UUID.randomUUID(); val second=UUID.randomUUID(); val actor=UUID.randomUUID()
+        val repository=mockk<RelationRepository>(relaxed=true)
+        val members=mockk<MemberService>(relaxed=true)
+        every { members.hasPermission(any(),any(),any()) } returns true
+        val pending=Relation.create(guildA=first,guildB=second,type=RelationType.ALLY,status=RelationStatus.PENDING,requestingGuildId=first)
+        every { repository.getById(pending.id) } returns pending
+        val service=RelationServiceBukkit(repository,members,mockk(relaxed=true)).apply { allianceLimit=0 }
+        assertNull(service.requestAlliance(first,second,actor))
+        assertNull(service.acceptAlliance(pending.id,second,actor))
+        verify(exactly=0) { repository.add(any()) }
+        verify(exactly=0) { repository.update(any()) }
+    }
     @Test fun `full alliance capacity blocks new requests and late acceptance`() {
         val first=UUID.randomUUID();val second=UUID.randomUUID();val actor=UUID.randomUUID()
         val repository=mockk<RelationRepository>(relaxed=true)
