@@ -1098,7 +1098,7 @@ class LumaGuilds : JavaPlugin() {
                 frontierConfig.serverTerritory?.let { tell("${it.name} is public server territory around spawn. Building and PvP are allowed; claiming is disabled.") }
                 tell("Use /claim help for territory commands and /raidinfo for the daily raid schedule (${frontierConfig.schedule.zone}).")
                 tell("During raids, attackers can destroy claims' Founding Vaults. TNT is encouraged; withers are disabled.")
-                tell("During a raid, use /raidarm near your loaded TNT cannon, then fire within 60 seconds. Unarmed TNT cannot damage vaults.")
+                tell("During a raid, operating a connected cannon lever or button can attribute its TNT automatically. For other designs, use /raidarm near loaded TNT and fire within 60 seconds. Unattributed TNT cannot damage vaults.")
                 tell("Overworld claims only; Nether travel is 1:1. Elytra, end crystals, respawn anchors, maces and totems are disabled.")
                 tell("One shared guild home (/guildhome, /setguildhome); /home and /sethome use the same destination. Homes are unavailable during raids or combat.")
                 if (living.settings.getBoolean("decay.enabled", false)) tell("Territories lose protection after ${living.settings.getLong("decay.inactive-days", 14).coerceIn(1,3650)} inactive days. Current members' movement or interaction renews activity; builds and items remain.")

@@ -34,6 +34,9 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.time.format.DateTimeFormatter
 
+internal fun frontierGuildInfoRelations(alliancesEnabled: Boolean): List<Pair<Int, RelationType>> =
+    if (alliancesEnabled) listOf(2 to RelationType.ALLY, 4 to RelationType.TRUCE, 6 to RelationType.ENEMY)
+    else listOf(3 to RelationType.TRUCE, 5 to RelationType.ENEMY)
 
 class GuildInfoMenu(private val menuNavigator: MenuNavigator, private val player: Player,
                    private var guild: Guild): Menu, KoinComponent {
@@ -115,11 +118,13 @@ class GuildInfoMenu(private val menuNavigator: MenuNavigator, private val player
         }
         addDescriptionSection(pane,6,0)
         val relations = relationService.getGuildRelations(guild.id)
-        listOf(RelationType.ALLY to Material.LIME_BANNER, RelationType.TRUCE to Material.WHITE_BANNER, RelationType.ENEMY to Material.RED_BANNER)
-            .forEachIndexed { index, (type, material) ->
+        val alliancesEnabled = (relationService as? net.lumalyte.lg.infrastructure.services.RelationServiceBukkit)?.allianceLimit != 0
+        frontierGuildInfoRelations(alliancesEnabled)
+            .forEach { (column, type) ->
+                val material = when(type) { RelationType.ALLY -> Material.LIME_BANNER; RelationType.TRUCE -> Material.WHITE_BANNER; else -> Material.RED_BANNER }
                 val entries = relations.filter { it.type == type && it.isActive() }.mapNotNull { guildService.getGuild(it.getOtherGuild(guild.id)) }
                 val title = when(type) { RelationType.ALLY -> "Allies"; RelationType.TRUCE -> "Truces"; else -> "Enemies" }
-                item(2 + index*2,1,material,"$title (${entries.size})",entries.take(4).map { it.name } + "Click to browse guilds.") {
+                item(column,1,material,"$title (${entries.size})",entries.take(4).map { it.name } + "Click to browse guilds.") {
                     menuNavigator.openMenu(menuFactory.createGuildRelationBrowserMenu(menuNavigator,player,guild,type))
                 }
             }
