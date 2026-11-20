@@ -67,7 +67,7 @@ object FrontierGuildMenu : KoinComponent {
         fun command(value: String) { player.performCommand(value) }
         button(1,0,Material.GRASS_BLOCK,"Claim this chunk",listOf("Preview before confirming.","Your first claim establishes the Founding Vault.")) { command("claim") }
         button(3,0,Material.ENDER_EYE,"Toggle borders",listOf("Show nearby borders for up to 60 seconds.","Click again or use /claim outline to hide them.")) { command("claimoutline") }
-        button(5,0,Material.FILLED_MAP,"Claim map",listOf("Toggle the nearby territory map.")) { command("claimmap") }
+        button(5,0,Material.FILLED_MAP,"Claim map",listOf("View nearby claims in chat.","Use /claimmap on for a live sidebar.")) { command("claimmap show") }
         button(7,0,Material.LEATHER_BOOTS,"Walking autoclaim",listOf("Preview and confirm connected chunk claiming.","Stop with /autoclaim off.")) { command("autoclaim") }
         button(2,1,Material.RED_BED,"Guild home",listOf("Teleport to your shared guild home.","Set with /g sethome. No raids or combat.")) { command("guildhome") }
         button(4,1,Material.CLOCK,"Raid status",listOf("View the daily raid schedule and objectives.")) { command("raidinfo") }
