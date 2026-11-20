@@ -11,7 +11,7 @@ depend: [RoseChat]
 commands:
   claimmap:
     description: Toggle the Frontier territory map
-    usage: /claimmap [on|off]
+    usage: /claimmap [show|on|off]
   raidalerts:
     description: Set optional linked Discord raid alert preference
   serverinfo:

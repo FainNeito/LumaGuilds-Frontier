@@ -132,9 +132,13 @@ class FrontierTerritoryScoreboard(
     fun start() {
         plugin.getCommand("claimmap")?.setExecutor { sender, _, _, args ->
             if(sender is Player) {
+                if (args.singleOrNull().equals("show", ignoreCase = true)) {
+                    showSnapshot(sender)
+                    return@setExecutor true
+                }
                 val key=sender.uniqueId.toString()
                 val enabled=when(args.firstOrNull()?.lowercase()) { "on"->true; "off"->false; null->!preferences.getBoolean(key,true); else->null }
-                if(enabled==null) sender.sendMessage(FrontierTheme.message("Map","Use /claimmap [on|off]."))
+                if(enabled==null) sender.sendMessage(FrontierTheme.message("Map","Use /claimmap [show|on|off]."))
                 else try {
                     val next=org.bukkit.configuration.file.YamlConfiguration().apply { loadFromString(preferences.saveToString());set(key,enabled) }
                     val temp=preferencesFile.toPath().resolveSibling(preferencesFile.name+".tmp")
@@ -142,7 +146,8 @@ class FrontierTerritoryScoreboard(
                     java.nio.file.Files.move(temp,preferencesFile.toPath(),java.nio.file.StandardCopyOption.ATOMIC_MOVE,java.nio.file.StandardCopyOption.REPLACE_EXISTING)
                     preferences.loadFromString(next.saveToString())
                     if(enabled) update(sender) else release(sender)
-                    sender.sendMessage(FrontierTheme.message("Map",if(enabled) "Claim map enabled when scoreboard space is available." else "Claim map disabled."))
+                    if (enabled && active[sender.uniqueId] == null) showSnapshot(sender)
+                    else sender.sendMessage(FrontierTheme.message("Map", if (enabled) "Claim map enabled." else "Claim map disabled."))
                 } catch(failure:Exception) { plugin.logger.warning("Could not save claim-map preference: ${failure.message}");sender.sendMessage(FrontierTheme.message("Map","Preference could not be saved; previous setting retained.")) }
             }
             true
@@ -198,10 +203,10 @@ class FrontierTerritoryScoreboard(
             if (!FrontierMapBoardPolicy.canCreate(player.scoreboard.objectives.size,player.scoreboard.teams.size)) return
             display = create(player) ?: return
         }
-        if (display.scoreboard.objectives.any { it !== display.objective } || display.scoreboard.teams.any { it !in display.lines }) {
+        if (display.scoreboard.objectives.any { it != display.objective } || display.scoreboard.teams.any { it !in display.lines }) {
             release(player); return
         }
-        if (display.scoreboard.getObjective(DisplaySlot.SIDEBAR) !== display.objective) return
+        if (display.scoreboard.getObjective(DisplaySlot.SIDEBAR) != display.objective) return
         render(player, display, location)
     }
 
@@ -226,13 +231,26 @@ class FrontierTerritoryScoreboard(
 
     private fun release(player: Player) {
         val display = active.remove(player.uniqueId) ?: return
-        val foreign=display.scoreboard.objectives.any { it !== display.objective } || display.scoreboard.teams.any { it !in display.lines }
+        val foreign=display.scoreboard.objectives.any { it != display.objective } || display.scoreboard.teams.any { it !in display.lines }
         if (player.scoreboard === display.scoreboard && !foreign) player.scoreboard = display.previous
         runCatching { display.objective.unregister() }
         display.lines.forEach { runCatching { it.unregister() } }
     }
 
+    private fun showSnapshot(player: Player) {
+        if (!player.world.name.equals(config.worldName, ignoreCase = true)) {
+            player.sendMessage(FrontierTheme.message("Map", "The claim map is available in the Frontier overworld."))
+            return
+        }
+        player.sendMessage(FrontierTheme.message("Map", "Nearby territory · North ↑"))
+        mapRows(player, player.location).forEach { player.sendMessage(it) }
+    }
+
     private fun render(player: Player, display: Display, location: Location) {
+        display.lines.zip(mapRows(player, location)).forEach { (team, row) -> team.prefix(row) }
+    }
+
+    private fun mapRows(player: Player, location: Location): List<Component> {
         val center = FrontierChunk.atBlock(location.world.uid, location.blockX, location.blockZ)
         val ownGuilds = guilds.getPlayerGuilds(player.uniqueId).mapTo(mutableSetOf()) { it.id }
         val claimCache = mutableMapOf<UUID, Claim?>()
@@ -272,7 +290,7 @@ class FrontierTerritoryScoreboard(
             .append(Component.text("◆ ", gold)).append(Component.text("You", cream))
         val legendMarkers = Component.text("▣ ", cream).append(Component.text("Vault  ", cream))
             .append(Component.text("⚑ ", MapTile.RAID.color)).append(Component.text("War banner", cream))
-        val rows = listOf(legendTop) + grid.mapIndexed { z, row ->
+        return listOf(legendTop) + grid.mapIndexed { z, row ->
             row.foldIndexed(Component.empty()) { x, line, cell ->
                 val marker = x == FrontierMapGrid.RADIUS && z == FrontierMapGrid.RADIUS
                 line.append(Component.text(if (marker) "◆" else cell.symbol.glyph,
@@ -286,6 +304,6 @@ class FrontierTerritoryScoreboard(
                 MapSymbol.SQUARE -> ""
             }, NamedTextColor.GRAY))
 
-        display.lines.zip(rows).forEach { (team, row) -> team.prefix(row) }
+
     }
 }
