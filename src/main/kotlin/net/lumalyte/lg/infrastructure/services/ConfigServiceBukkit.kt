@@ -50,7 +50,7 @@ class ConfigServiceBukkit(private val configProvider: () -> FileConfiguration): 
                 minChunkZ = config.getInt("frontier.server_territory.min_chunk_z", -8),
                 maxChunkZ = config.getInt("frontier.server_territory.max_chunk_z", 7),
             ).let { territory ->
-                if (config.getBoolean("frontier.server_territory.cover_spawn_radius", false)) {
+                if (config.getBoolean("frontier.server_territory.cover_spawn_radius", true)) {
                     val chunks = (config.getInt("frontier.world.spawn_max_radius", 160) + 15) / 16
                     territory.copy(minChunkX = minOf(territory.minChunkX, -chunks), maxChunkX = maxOf(territory.maxChunkX, chunks - 1),
                         minChunkZ = minOf(territory.minChunkZ, -chunks), maxChunkZ = maxOf(territory.maxChunkZ, chunks - 1))

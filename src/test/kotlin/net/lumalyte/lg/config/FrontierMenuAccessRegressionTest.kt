@@ -26,6 +26,20 @@ class FrontierMenuAccessRegressionTest {
         assertTrue("vault" in FrontierServerRules.guildCommands)
         assertTrue("allychat" in FrontierServerRules.guildCommands)
     }
+    @Test fun `old configs reserve the full spawn radius unless explicitly opted out`() {
+        val yaml = YamlConfiguration()
+        yaml.set("frontier.enabled", true)
+        yaml.set("claim_geometry", "CHUNKS")
+        val zone = ConfigServiceBukkit(yaml).loadConfig().frontier.serverTerritory!!
+        for (edge in listOf(-160, -159, 159)) {
+            assertTrue(zone.contains(edge, 0))
+            assertTrue(zone.contains(0, edge))
+        }
+        assertFalse(zone.contains(160, 0))
+        yaml.set("frontier.server_territory.cover_spawn_radius", false)
+        assertFalse(ConfigServiceBukkit(yaml).loadConfig().frontier.serverTerritory!!.contains(159, 0))
+    }
+
     @Test fun `reservation optionally expands to all random spawn chunks`() {
         val yaml = YamlConfiguration()
         yaml.set("frontier.enabled", true)
