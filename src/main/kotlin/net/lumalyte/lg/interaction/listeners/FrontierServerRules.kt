@@ -19,17 +19,20 @@ import java.util.concurrent.ThreadLocalRandom
 /** Registered only on the isolated Frontier profile. Items are denied, not deleted. */
 class FrontierServerRules(private val config: FrontierConfig, private val openMenu: (Player) -> Unit = {}) : Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    fun onWitherSpawn(event: org.bukkit.event.entity.CreatureSpawnEvent) {
-        if (event.entity is org.bukkit.entity.Wither) event.isCancelled = true
+    fun onMobSpawn(event: org.bukkit.event.entity.CreatureSpawnEvent) {
+        if (disabledMob(event.entity)) event.isCancelled = true
     }
 
-    fun removeWithers(entities: Collection<org.bukkit.entity.Entity>) {
-        entities.filterIsInstance<org.bukkit.entity.Wither>().forEach { it.remove() }
+    fun removeDisabledMobs(entities: Collection<org.bukkit.entity.Entity>) {
+        entities.filter(::disabledMob).forEach { it.remove() }
     }
+
+    private fun disabledMob(entity: org.bukkit.entity.Entity) =
+        entity is org.bukkit.entity.Wither || entity is org.bukkit.entity.Shulker
 
     @EventHandler
-    fun onWithersLoaded(event: org.bukkit.event.world.EntitiesLoadEvent) {
-        removeWithers(event.entities)
+    fun onMobsLoaded(event: org.bukkit.event.world.EntitiesLoadEvent) {
+        removeDisabledMobs(event.entities)
     }
 
     var homeAction: (Player, Boolean) -> Unit = { _, _ -> }
@@ -37,7 +40,11 @@ class FrontierServerRules(private val config: FrontierConfig, private val openMe
     var rosterLocked: () -> Boolean = { false }
     var warAction: (Player) -> Unit = {}
     companion object {
-        val bannedItems = setOf(Material.END_CRYSTAL, Material.ELYTRA, Material.RESPAWN_ANCHOR, Material.MACE)
+        private val endOpens = java.time.Instant.parse("2026-11-27T21:00:00Z")
+        internal fun endLocked(world: World?, now: java.time.Instant = java.time.Instant.now()) =
+            world?.environment == World.Environment.THE_END && now.isBefore(endOpens)
+        private val shulkerBoxes = Material.entries.filter { !it.isLegacy && it.name.endsWith("SHULKER_BOX") }.toSet()
+        val bannedItems = setOf(Material.END_CRYSTAL, Material.ELYTRA, Material.RESPAWN_ANCHOR, Material.MACE, Material.ENDER_CHEST) + shulkerBoxes
         val guildCommands = setOf("war", "ranks", "warbanner", "home", "sethome", "menu", "help", "create", "rename", "invite", "join", "accept", "decline", "invites",
             "kick", "leave", "disband", "transfer", "tag", "description", "desc", "info", "getvault", "vault", "allychat", "chat", "notify", "notifications")
     }
@@ -136,6 +143,11 @@ class FrontierServerRules(private val config: FrontierConfig, private val openMe
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onPortal(event: org.bukkit.event.player.PlayerPortalEvent) {
+        if (endLocked(event.to?.world)) {
+            event.isCancelled = true
+            event.player.sendMessage(FrontierTheme.message("Frontier", "The End opens November 27 at 4 PM Eastern."))
+            return
+        }
         if (event.cause != org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.NETHER_PORTAL) return
         event.to = portalDestination(event.from, event.to ?: return)
         event.searchRadius = 16
@@ -144,13 +156,17 @@ class FrontierServerRules(private val config: FrontierConfig, private val openMe
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onEntityPortal(event: org.bukkit.event.entity.EntityPortalEvent) {
+        if (endLocked(event.to?.world)) {
+            event.isCancelled = true
+            return
+        }
         event.to = portalDestination(event.from, event.to ?: return)
         event.searchRadius = 16
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onTeleport(event: org.bukkit.event.player.PlayerTeleportEvent) {
-        if (event.cause == org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.END_GATEWAY || event.to?.let(::onRoof) == true)
+        if (endLocked(event.to?.world) || event.cause == org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.END_GATEWAY || event.to?.let(::onRoof) == true)
             event.isCancelled = true
     }
 
@@ -193,11 +209,41 @@ class FrontierServerRules(private val config: FrontierConfig, private val openMe
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onUse(event: PlayerInteractEvent) {
-        if (event.item?.type in bannedItems || event.clickedBlock?.type == Material.RESPAWN_ANCHOR) event.isCancelled = true
+        if (event.item?.type in bannedItems || event.clickedBlock?.type == Material.RESPAWN_ANCHOR ||
+            event.clickedBlock?.type == Material.ENDER_CHEST || event.clickedBlock?.type in shulkerBoxes) event.isCancelled = true
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    fun onDispense(event: org.bukkit.event.block.BlockDispenseEvent) {
+        if (event.item.type in shulkerBoxes) event.isCancelled = true
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    fun onOpen(event: org.bukkit.event.inventory.InventoryOpenEvent) {
+        when (event.inventory.type) {
+            org.bukkit.event.inventory.InventoryType.ENDER_CHEST,
+            org.bukkit.event.inventory.InventoryType.SHULKER_BOX -> event.isCancelled = true
+            else -> Unit
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    fun onHopperTransfer(event: org.bukkit.event.inventory.InventoryMoveItemEvent) {
+        val box = org.bukkit.event.inventory.InventoryType.SHULKER_BOX
+        if (event.source.type == box || event.destination.type == box) event.isCancelled = true
+    }
+
+    @EventHandler fun onChangedWorld(event: org.bukkit.event.player.PlayerChangedWorldEvent) {
+        if (endLocked(event.player.world)) spawn()?.let { event.player.teleport(it) }
     }
 
     @EventHandler fun onRecipe(event: PrepareItemCraftEvent) {
         if (event.inventory.result?.type in bannedItems) event.inventory.result = null
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    fun onAutoCraft(event: org.bukkit.event.block.CrafterCraftEvent) {
+        if (event.result.type in bannedItems) event.isCancelled = true
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -212,10 +258,17 @@ class FrontierServerRules(private val config: FrontierConfig, private val openMe
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onDamage(event: EntityDamageByEntityEvent) {
+        if (event.entity is Player && (isTnt(event.damager) || isTnt(event.damageSource.directEntity))) {
+            event.isCancelled = true
+            return
+        }
         val attacker = event.damager as? Player
         if (event.damager is EnderCrystal || attacker?.inventory?.itemInMainHand?.type == Material.MACE)
             event.isCancelled = true
     }
+
+    private fun isTnt(entity: org.bukkit.entity.Entity?) =
+        entity is org.bukkit.entity.TNTPrimed || entity is org.bukkit.entity.minecart.ExplosiveMinecart
 
     private fun spawn(): Location? {
         val world = Bukkit.getWorld(config.worldName) ?: return null
@@ -244,12 +297,12 @@ class FrontierServerRules(private val config: FrontierConfig, private val openMe
     @EventHandler(priority = EventPriority.HIGH)
     fun onFirstJoin(event: org.bukkit.event.player.PlayerJoinEvent) {
         // Player data is loaded here, and terrain access stays on the server thread.
-        if (!event.player.hasPlayedBefore() || onRoof(event.player.location))
+        if (!event.player.hasPlayedBefore() || endLocked(event.player.world) || onRoof(event.player.location))
             spawn()?.let { event.player.teleport(it) }
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     fun onRespawn(event: PlayerRespawnEvent) {
-        if ((!event.isBedSpawn && !event.isAnchorSpawn) || onRoof(event.respawnLocation)) spawn()?.let { event.respawnLocation = it }
+        if ((!event.isBedSpawn && !event.isAnchorSpawn) || endLocked(event.respawnLocation.world) || onRoof(event.respawnLocation)) spawn()?.let { event.respawnLocation = it }
     }
 }

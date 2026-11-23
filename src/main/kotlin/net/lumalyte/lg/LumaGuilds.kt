@@ -979,7 +979,7 @@ class LumaGuilds : JavaPlugin() {
             server.pluginManager.registerEvents(rules, this)
             server.pluginManager.registerEvents(net.lumalyte.lg.interaction.listeners.FrontierPortalProtection(
                 frontierConfig, get().get(), get().get(), get().get()), this)
-            server.worlds.forEach { rules.removeWithers(it.entities) }
+            server.worlds.forEach { rules.removeDisabledMobs(it.entities) }
             frontierConfig.serverTerritory?.let { territory ->
                 val repository = get().get<net.lumalyte.lg.application.persistence.ClaimRepository>()
                 val partitions = get().get<net.lumalyte.lg.application.persistence.PartitionRepository>()
