@@ -34,7 +34,8 @@ class FrontierRaidExplosionsTest {
     private val config=MainConfig(frontier=FrontierConfig(enabled=true,schedule=FrontierRaidSchedule(ZoneOffset.UTC,
         LocalTime.now(ZoneOffset.UTC).minusMinutes(1),Duration.ofHours(1))))
     private val plugin=mockk<org.bukkit.plugin.java.JavaPlugin>(relaxed=true)
-    private val listener=FrontierObjectiveListener(objectives,claims,vaults,members,plugin,config,partitions)
+    private var roll = 15
+    private val listener=FrontierObjectiveListener(objectives,claims,vaults,members,plugin,config,partitions) { roll }
     init {
         every { vaults.getGuildForVaultChest(any()) } returns null
         every { claims.getById(claim.id) } returns claim
@@ -47,6 +48,13 @@ class FrontierRaidExplosionsTest {
         return list
     }
     @Test fun `TNT damages ordinary claim blocks during raids`() { assertEquals(listOf(block),explode(mockk<TNTPrimed> { every { source } returns null })) }
+    @Test fun `low terrain rolls spare the block but always allow TNT chain priming`() {
+        val tnt = mockk<TNTPrimed> { every { source } returns null }
+        roll = 14
+        assertTrue(explode(tnt).isEmpty())
+        every { block.type } returns Material.TNT
+        assertEquals(listOf(block), explode(tnt))
+    }
     @Test fun `outside raid TNT cannot damage ordinary claims or the vault`() {
         val closedConfig=MainConfig(frontier=FrontierConfig(enabled=true,schedule=FrontierRaidSchedule(ZoneOffset.UTC,
             LocalTime.now(ZoneOffset.UTC).plusHours(2),Duration.ofMinutes(30))))

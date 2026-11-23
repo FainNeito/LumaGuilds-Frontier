@@ -24,6 +24,7 @@ class FrontierObjectiveListener(
     private val plugin: JavaPlugin,
     private val config: net.lumalyte.lg.config.MainConfig = net.lumalyte.lg.config.MainConfig(),
     private val partitions: net.lumalyte.lg.application.persistence.PartitionRepository? = null,
+    private val terrainRoll: () -> Int = { java.util.concurrent.ThreadLocalRandom.current().nextInt(100) },
 ) : Listener {
     var raidNotifications: FrontierRaidNotifications? = null
     var vaultLossNotifications: FrontierVaultLossNotifications? = null
@@ -145,9 +146,16 @@ class FrontierObjectiveListener(
     fun onBlockExplosion(event: BlockExplodeEvent) = protect(event.blockList())
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    fun onEntityExplosion(event: EntityExplodeEvent) = protect(event.blockList(),event.entity is org.bukkit.entity.TNTPrimed,
-        event.entity is org.bukkit.entity.Wither || event.entity is org.bukkit.entity.WitherSkull,
-        (event.entity as? org.bukkit.entity.TNTPrimed)?.source as? org.bukkit.entity.Player)
+    fun onEntityExplosion(event: EntityExplodeEvent) {
+        val tnt = event.entity as? org.bukkit.entity.TNTPrimed
+        val blocks = event.blockList()
+        protect(blocks, tnt != null, event.entity is org.bukkit.entity.Wither || event.entity is org.bukkit.entity.WitherSkull,
+            tnt?.source as? org.bukkit.entity.Player)
+        // Roll only for remaining terrain. Vault hits and TNT chain priming retain their normal behavior.
+        if (tnt != null || event.entity is org.bukkit.entity.minecart.ExplosiveMinecart) {
+            blocks.removeIf { it.type != Material.TNT && terrainRoll() < 15 }
+        }
+    }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onWitherChange(event: org.bukkit.event.entity.EntityChangeBlockEvent) {

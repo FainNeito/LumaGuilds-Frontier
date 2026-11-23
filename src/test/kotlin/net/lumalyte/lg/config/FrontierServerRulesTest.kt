@@ -14,15 +14,69 @@ import java.time.Duration
 import kotlin.test.*
 
 class FrontierServerRulesTest {
+    @Test fun `Ender Chest crafting placement and access are blocked while regular chests open`() {
+        val rules = FrontierServerRules(FrontierConfig(enabled = true))
+        val craft = mockk<org.bukkit.event.inventory.CraftItemEvent>(relaxed = true) {
+            every { recipe.result.type } returns Material.ENDER_CHEST
+        }
+        rules.onCraft(craft)
+        verify { craft.isCancelled = true }
+        val place = mockk<org.bukkit.event.block.BlockPlaceEvent>(relaxed = true) {
+            every { block.location.world.environment } returns org.bukkit.World.Environment.NORMAL
+            every { itemInHand.type } returns Material.ENDER_CHEST
+        }
+        rules.onPlace(place)
+        verify { place.isCancelled = true }
+        val interact = mockk<org.bukkit.event.player.PlayerInteractEvent>(relaxed = true) {
+            every { item } returns null
+            every { clickedBlock?.type } returns Material.ENDER_CHEST
+        }
+        rules.onUse(interact)
+        verify { interact.isCancelled = true }
+        val open = mockk<org.bukkit.event.inventory.InventoryOpenEvent>(relaxed = true) {
+            every { inventory.type } returns org.bukkit.event.inventory.InventoryType.ENDER_CHEST
+        }
+        rules.onOpen(open)
+        verify(exactly = 1) { open.isCancelled = true }
+        every { open.inventory.type } returns org.bukkit.event.inventory.InventoryType.CHEST
+        rules.onOpen(open)
+        verify(exactly = 1) { open.isCancelled = true }
+    }
+    @Test fun `End entry opens at the exact November 27 Eastern boundary`() {
+        val end = mockk<org.bukkit.World> { every { environment } returns org.bukkit.World.Environment.THE_END }
+        val normal = mockk<org.bukkit.World> { every { environment } returns org.bukkit.World.Environment.NORMAL }
+        val before = java.time.Instant.parse("2026-11-27T20:59:59.999Z")
+        assertTrue(FrontierServerRules.endLocked(end, before))
+        assertFalse(FrontierServerRules.endLocked(normal, before))
+        assertFalse(FrontierServerRules.endLocked(end, java.time.Instant.parse("2026-11-27T21:00:00Z")))
+    }
+
+    @Test fun `primed TNT and TNT carts cannot hurt players`() {
+        val rules = FrontierServerRules(FrontierConfig(enabled = true))
+        for (source in listOf(mockk<org.bukkit.entity.TNTPrimed>(), mockk<org.bukkit.entity.minecart.ExplosiveMinecart>())) {
+            val event = mockk<org.bukkit.event.entity.EntityDamageByEntityEvent>(relaxed = true) {
+                every { damager } returns source
+                every { entity } returns mockk<org.bukkit.entity.Player>()
+                every { cause } returns org.bukkit.event.entity.EntityDamageEvent.DamageCause.ENTITY_EXPLOSION
+            }
+            rules.onDamage(event)
+            verify { event.isCancelled = true }
+        }
+    }
     @Test fun `withers cannot spawn and loaded withers are removed without touching other mobs`() {
         val rules=FrontierServerRules(FrontierConfig(enabled=true))
         val wither=mockk<org.bukkit.entity.Wither>(relaxed=true)
+        val shulker=mockk<org.bukkit.entity.Shulker>(relaxed=true)
         val cow=mockk<org.bukkit.entity.Cow>(relaxed=true)
         val spawn=org.bukkit.event.entity.CreatureSpawnEvent(wither,org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.BUILD_WITHER)
-        rules.onWitherSpawn(spawn)
+        rules.onMobSpawn(spawn)
         assertTrue(spawn.isCancelled)
-        rules.removeWithers(listOf(wither,cow))
+        val shulkerSpawn = org.bukkit.event.entity.CreatureSpawnEvent(shulker, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.NATURAL)
+        rules.onMobSpawn(shulkerSpawn)
+        assertTrue(shulkerSpawn.isCancelled)
+        rules.removeDisabledMobs(listOf(wither,shulker,cow))
         verify(exactly=1) { wither.remove() }
+        verify(exactly=1) { shulker.remove() }
         verify(exactly=0) { cow.remove() }
     }
 
@@ -78,6 +132,7 @@ class FrontierServerRulesTest {
         assertFalse(invite.isCancelled)
         assertFalse(Material.TOTEM_OF_UNDYING in FrontierServerRules.bannedItems)
         assertTrue(Material.MACE in FrontierServerRules.bannedItems)
+        assertEquals(17, FrontierServerRules.bannedItems.count { it.name.endsWith("SHULKER_BOX") })
         val glide = mockk<EntityToggleGlideEvent>(relaxed = true) { every { isGliding } returns true }
         rules.onGlide(glide)
         verify { glide.isCancelled = true }
